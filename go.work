@@ -1,0 +1,9 @@
+go 1.26
+
+use (
+	./backend/services/api-gateway
+	./backend/services/auth-service
+	./backend/services/ledger-service
+	./backend/services/analytics-service
+)
+
