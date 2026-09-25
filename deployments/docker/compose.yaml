@@ -1,0 +1,74 @@
+services:
+  auth-service:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.go-service
+      args:
+        SERVICE: auth-service
+    environment:
+      PORT: "8081"
+      DATABASE_URL: "${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env}"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ledger-service:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.go-service
+      args:
+        SERVICE: ledger-service
+    environment:
+      PORT: "8082"
+      DATABASE_URL: "${LEDGER_DATABASE_URL:?Set LEDGER_DATABASE_URL in .env}"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  analytics-service:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.go-service
+      args:
+        SERVICE: analytics-service
+    environment:
+      PORT: "8083"
+      LEDGER_SERVICE_URL: http://ledger-service:8082
+    depends_on:
+      ledger-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8083/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api-gateway:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.go-service
+      args:
+        SERVICE: api-gateway
+    environment:
+      PORT: "8080"
+      AUTH_SERVICE_URL: http://auth-service:8081
+      LEDGER_SERVICE_URL: http://ledger-service:8082
+      ANALYTICS_SERVICE_URL: http://analytics-service:8083
+    ports:
+      - "127.0.0.1:${API_GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      ledger-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
