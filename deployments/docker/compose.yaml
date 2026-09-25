@@ -1,3 +1,5 @@
+name: finory
+
 services:
   auth-service:
     build:
