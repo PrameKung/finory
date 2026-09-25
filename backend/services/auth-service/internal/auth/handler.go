@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -42,8 +43,40 @@ func NewHandler(oauth oauth2.Config, verifier TokenVerifier, service *Service, a
 func (h *Handler) Register(e *echo.Echo) {
 	e.GET("/auth/google", h.authorize)
 	e.GET("/auth/google/callback", h.callback)
+	e.GET("/auth/me", h.me)
 	e.POST("/auth/refresh", h.refresh)
 	e.POST("/auth/logout", h.logout)
+}
+
+func (h *Handler) me(c *echo.Context) error {
+	var rawToken string
+	authorizations := c.Request().Header.Values(echo.HeaderAuthorization)
+	switch len(authorizations) {
+	case 0:
+		cookie, err := c.Cookie(accessCookieName)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		}
+		rawToken = cookie.Value
+	case 1:
+		parts := strings.Fields(authorizations[0])
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		}
+		rawToken = parts[1]
+	default:
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	user, err := h.service.CurrentUser(ctx, rawToken)
+	if errors.Is(err, ErrInvalidAccessToken) {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "user_lookup_failed"})
+	}
+	return c.JSON(http.StatusOK, user)
 }
 
 func (h *Handler) logout(c *echo.Context) error {
@@ -103,20 +136,28 @@ func (h *Handler) authorize(c *echo.Context) error {
 }
 
 func (h *Handler) callback(c *echo.Context) error {
-	c.SetCookie(&http.Cookie{
-		Name: flowCookieName, Path: "/api/v1/auth/google", MaxAge: -1,
-		HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
-	})
-	cookie, err := c.Cookie(flowCookieName)
+	h.clearCookie(c, flowCookieName, "/api/v1/auth/google")
+	var flowCookie *http.Cookie
+	for _, cookie := range c.Request().Cookies() {
+		if cookie.Name == flowCookieName {
+			if flowCookie != nil {
+				return invalidCallback(c)
+			}
+			flowCookie = cookie
+		}
+	}
+	if flowCookie == nil {
+		return invalidCallback(c)
+	}
+	parts := strings.Split(flowCookie.Value, ".")
+	query, err := url.ParseQuery(c.Request().URL.RawQuery)
 	if err != nil {
 		return invalidCallback(c)
 	}
-	parts := strings.Split(cookie.Value, ".")
-	query := c.Request().URL.Query()
 	states, codes := query["state"], query["code"]
 	_, hasProviderError := query["error"]
 	if len(parts) != 3 || len(states) != 1 || len(codes) != 1 || states[0] == "" || codes[0] == "" ||
-		len(parts[0]) < 40 || len(parts[1]) < 40 || len(parts[2]) < 40 ||
+		!validRandomValue(parts[0]) || !validRandomValue(parts[1]) || !validRandomValue(parts[2]) ||
 		subtle.ConstantTimeCompare([]byte(states[0]), []byte(parts[0])) != 1 || hasProviderError {
 		return invalidCallback(c)
 	}
@@ -187,6 +228,11 @@ func randomValue() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(value[:]), nil
+}
+
+func validRandomValue(value string) bool {
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	return err == nil && len(decoded) == 32 && base64.RawURLEncoding.EncodeToString(decoded) == value
 }
 
 func invalidCallback(c *echo.Context) error {

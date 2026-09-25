@@ -68,6 +68,30 @@ func TestAuthRouteBoundary(t *testing.T) {
 	}
 }
 
+func TestMeProxiesAuthenticatedRequestToAuthService(t *testing.T) {
+	token := testAccessToken(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/auth/me" || r.Header.Get("Authorization") != "Bearer "+token {
+			t.Errorf("unexpected /auth/me request: %s %s, authorization=%q", r.Method, r.URL.Path, r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"user-id"}`))
+	}))
+	defer upstream.Close()
+	authURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != `{"id":"user-id"}` {
+		t.Fatalf("unexpected /auth/me response: status=%d, body=%q", response.Code, response.Body.String())
+	}
+}
+
 func TestAuthServiceHealthRoute(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/health" {

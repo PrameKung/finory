@@ -74,6 +74,15 @@ func (m *memoryUsers) UpsertGoogleUser(_ context.Context, user GoogleUser) (stri
 	return testUserID, nil
 }
 
+func (m *memoryUsers) GetUserByID(_ context.Context, id string) (User, error) {
+	for _, storedID := range m.ids {
+		if storedID == id {
+			return User{ID: id, Email: m.lastUser.Email, DisplayName: m.lastUser.DisplayName, AvatarURL: m.lastUser.AvatarURL}, nil
+		}
+	}
+	return User{}, pgx.ErrNoRows
+}
+
 type oauthFixture struct {
 	handler   http.Handler
 	provider  *httptest.Server
@@ -158,13 +167,18 @@ func (f *oauthFixture) start(t *testing.T) (*http.Cookie, string) {
 
 func (f *oauthFixture) signIDToken(t *testing.T, nonce string) {
 	t.Helper()
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+	f.signClaims(t, jwt.MapClaims{
 		"iss": "https://accounts.google.com", "aud": "test-client",
 		"sub": "stable-google-subject", "exp": time.Now().Add(time.Hour).Unix(),
 		"iat": time.Now().Unix(), "nonce": nonce,
 		"email": "user@example.com", "email_verified": true,
 		"name": "Example User", "picture": "https://example.com/avatar.png",
 	})
+}
+
+func (f *oauthFixture) signClaims(t *testing.T, claims jwt.MapClaims) {
+	t.Helper()
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test-key"
 	var err error
 	f.issuedJWT, err = token.SignedString(f.key)
@@ -226,18 +240,35 @@ func TestGoogleOAuthCreatesAndReusesUser(t *testing.T) {
 
 func TestGoogleOAuthRejectsInvalidCallbacks(t *testing.T) {
 	for _, test := range []struct {
-		name       string
-		query      func(string) string
-		cookie     bool
-		wrongNonce bool
-		badCode    bool
+		name         string
+		query        func(string) string
+		cookie       bool
+		cookieValue  string
+		secondCookie bool
+		wrongNonce   bool
+		badCode      bool
+		claims       func(jwt.MapClaims)
+		badIDToken   bool
 	}{
 		{name: "missing cookie", query: func(s string) string { return "code=good-code&state=" + s }},
 		{name: "wrong state", query: func(string) string { return "code=good-code&state=wrong" }, cookie: true},
+		{name: "missing state", query: func(string) string { return "code=good-code" }, cookie: true},
+		{name: "duplicate state", query: func(s string) string { return "code=good-code&state=" + s + "&state=" + s }, cookie: true},
+		{name: "duplicate code", query: func(s string) string { return "code=good-code&code=good-code&state=" + s }, cookie: true},
+		{name: "malformed query", query: func(s string) string { return "code=good-code&state=" + s + "&%zz" }, cookie: true},
 		{name: "missing code", query: func(s string) string { return "state=" + s }, cookie: true},
+		{name: "empty code", query: func(s string) string { return "code=&state=" + s }, cookie: true},
+		{name: "malformed flow cookie", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, cookieValue: "invalid"},
+		{name: "duplicate flow cookie", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, secondCookie: true},
 		{name: "provider error", query: func(s string) string { return "state=" + s + "&code=good-code&error=access_denied" }, cookie: true},
 		{name: "wrong nonce", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, wrongNonce: true},
 		{name: "failed exchange", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, badCode: true},
+		{name: "invalid ID token", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, badIDToken: true},
+		{name: "wrong issuer", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, claims: func(c jwt.MapClaims) { c["iss"] = "https://other.example.com" }},
+		{name: "wrong audience", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, claims: func(c jwt.MapClaims) { c["aud"] = "other-client" }},
+		{name: "expired ID token", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, claims: func(c jwt.MapClaims) { c["exp"] = time.Now().Add(-time.Hour).Unix() }},
+		{name: "unverified email", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, claims: func(c jwt.MapClaims) { c["email_verified"] = false }},
+		{name: "missing subject", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, claims: func(c jwt.MapClaims) { delete(c, "sub") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			f := newOAuthFixture(t)
@@ -245,15 +276,122 @@ func TestGoogleOAuthRejectsInvalidCallbacks(t *testing.T) {
 			if test.wrongNonce {
 				nonce = "incorrect-nonce"
 			}
-			f.signIDToken(t, nonce)
+			claims := jwt.MapClaims{
+				"iss": "https://accounts.google.com", "aud": "test-client",
+				"sub": "stable-google-subject", "exp": time.Now().Add(time.Hour).Unix(),
+				"iat": time.Now().Unix(), "nonce": nonce,
+				"email": "user@example.com", "email_verified": true,
+				"name": "Example User", "picture": "https://example.com/avatar.png",
+			}
+			if test.claims != nil {
+				test.claims(claims)
+			}
+			f.signClaims(t, claims)
+			if test.badIDToken {
+				f.issuedJWT = "invalid"
+			}
 			f.badCode = test.badCode
 			state := strings.Split(cookie.Value, ".")[0]
+			if test.cookieValue != "" {
+				cookie.Value = test.cookieValue
+			}
 			if !test.cookie {
 				cookie = nil
 			}
-			response := f.callback(cookie, test.query(state))
+			var response *httptest.ResponseRecorder
+			if test.secondCookie {
+				request := httptest.NewRequest(http.MethodGet, "/auth/google/callback?"+test.query(state), nil)
+				request.AddCookie(cookie)
+				request.AddCookie(&http.Cookie{Name: flowCookieName, Value: cookie.Value})
+				response = httptest.NewRecorder()
+				f.handler.ServeHTTP(response, request)
+			} else {
+				response = f.callback(cookie, test.query(state))
+			}
 			if response.Code != http.StatusBadRequest || f.users.upserts != 0 {
 				t.Fatalf("invalid callback accepted: status=%d, users=%d", response.Code, f.users.upserts)
+			}
+			if f.requests != 0 && !test.badCode && !test.wrongNonce && test.claims == nil && !test.badIDToken {
+				t.Fatal("malformed callback reached token exchange")
+			}
+		})
+	}
+}
+
+func TestMeReturnsAuthenticatedUser(t *testing.T) {
+	f := newOAuthFixture(t)
+	flowCookie, nonce := f.start(t)
+	f.signIDToken(t, nonce)
+	state := strings.Split(flowCookie.Value, ".")[0]
+	signIn := f.callback(flowCookie, "code=good-code&state="+url.QueryEscape(state))
+	if signIn.Code != http.StatusSeeOther {
+		t.Fatalf("sign-in status = %d", signIn.Code)
+	}
+	var access *http.Cookie
+	for _, cookie := range signIn.Result().Cookies() {
+		if cookie.Name == accessCookieName {
+			access = cookie
+		}
+	}
+	if access == nil {
+		t.Fatal("missing access cookie")
+	}
+	for _, bearer := range []bool{false, true} {
+		request := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+		if bearer {
+			request.Header.Set("Authorization", "Bearer "+access.Value)
+		} else {
+			request.AddCookie(access)
+		}
+		response := httptest.NewRecorder()
+		f.handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("me status = %d, body = %s", response.Code, response.Body.String())
+		}
+		var user User
+		if err := json.Unmarshal(response.Body.Bytes(), &user); err != nil {
+			t.Fatal(err)
+		}
+		if user.ID != testUserID || user.Email != "user@example.com" || user.DisplayName != "Example User" || user.AvatarURL != "https://example.com/avatar.png" {
+			t.Fatalf("unexpected user: %+v", user)
+		}
+	}
+}
+
+func TestMeRejectsMissingInvalidAndDeletedUser(t *testing.T) {
+	f := newOAuthFixture(t)
+	validToken, err := NewService(f.users, []byte(testSecret)).issueAccessToken(testUserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Subject: testUserID, ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+	}).SignedString([]byte(testSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, authorization string
+		cookie              *http.Cookie
+	}{
+		{name: "missing"},
+		{name: "invalid bearer", authorization: "Bearer invalid"},
+		{name: "expired bearer", authorization: "Bearer " + expiredToken},
+		{name: "missing user", authorization: "Bearer " + validToken},
+		{name: "invalid cookie", cookie: &http.Cookie{Name: accessCookieName, Value: "invalid"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+			if tc.authorization != "" {
+				request.Header.Set("Authorization", tc.authorization)
+			}
+			if tc.cookie != nil {
+				request.AddCookie(tc.cookie)
+			}
+			response := httptest.NewRecorder()
+			f.handler.ServeHTTP(response, request)
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("me status = %d, body = %s", response.Code, response.Body.String())
 			}
 		})
 	}

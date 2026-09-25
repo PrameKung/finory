@@ -34,6 +34,18 @@ func (r *Repository) UpsertGoogleUser(ctx context.Context, user GoogleUser) (str
 	})
 }
 
+func (r *Repository) GetUserByID(ctx context.Context, id string) (User, error) {
+	var userID pgtype.UUID
+	if err := userID.Scan(id); err != nil {
+		return User{}, err
+	}
+	row, err := r.queries.GetUserByID(ctx, userID)
+	if err != nil {
+		return User{}, err
+	}
+	return User{ID: row.ID, Email: row.Email, DisplayName: row.DisplayName, AvatarURL: row.AvatarUrl}, nil
+}
+
 func (r *Repository) CreateRefreshSession(ctx context.Context, userID string, tokenHash []byte) error {
 	var id pgtype.UUID
 	if err := id.Scan(userID); err != nil {

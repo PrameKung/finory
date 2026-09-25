@@ -12,3 +12,10 @@ ON CONFLICT (google_subject) DO UPDATE SET
     avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
     updated_at = now()
 RETURNING id::text;
+
+-- name: GetUserByID :one
+SELECT id::text AS id, email,
+       COALESCE(display_name, '')::text AS display_name,
+       COALESCE(avatar_url, '')::text AS avatar_url
+FROM users
+WHERE id = sqlc.arg(id)::uuid;

@@ -7,7 +7,36 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id::text AS id, email,
+       COALESCE(display_name, '')::text AS display_name,
+       COALESCE(avatar_url, '')::text AS avatar_url
+FROM users
+WHERE id = $1::uuid
+`
+
+type GetUserByIDRow struct {
+	ID          string
+	Email       string
+	DisplayName string
+	AvatarUrl   string
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
 
 const upsertGoogleUser = `-- name: UpsertGoogleUser :one
 INSERT INTO users (google_subject, email, display_name, avatar_url)

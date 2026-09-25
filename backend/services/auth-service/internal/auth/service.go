@@ -11,19 +11,29 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var ErrInvalidIdentity = errors.New("invalid Google identity")
 var ErrInvalidSession = errors.New("invalid refresh session")
+var ErrInvalidAccessToken = errors.New("invalid access token")
 
 const accessTokenTTL = 15 * time.Minute
 const refreshTokenTTL = 30 * 24 * time.Hour
 
 type Store interface {
 	UpsertGoogleUser(context.Context, GoogleUser) (string, error)
+	GetUserByID(context.Context, string) (User, error)
 	CreateRefreshSession(context.Context, string, []byte) error
 	RotateRefreshSession(context.Context, []byte, []byte) (string, error)
 	DeleteRefreshSession(context.Context, []byte) error
+}
+
+type User struct {
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
+	AvatarURL   string `json:"avatarUrl"`
 }
 
 type SessionTokens struct {
@@ -91,6 +101,25 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 		return nil
 	}
 	return s.store.DeleteRefreshSession(ctx, hash[:])
+}
+
+func (s *Service) CurrentUser(ctx context.Context, rawToken string) (User, error) {
+	claims := &jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(rawToken, claims, func(*jwt.Token) (any, error) {
+		return s.accessSecret, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired(), jwt.WithStrictDecoding())
+	if err != nil || !token.Valid {
+		return User{}, ErrInvalidAccessToken
+	}
+	var id pgtype.UUID
+	if err := id.Scan(claims.Subject); err != nil || !id.Valid || id.Bytes == [16]byte{} {
+		return User{}, ErrInvalidAccessToken
+	}
+	user, err := s.store.GetUserByID(ctx, claims.Subject)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, ErrInvalidAccessToken
+	}
+	return user, err
 }
 
 func (s *Service) issueAccessToken(id string) (string, error) {
