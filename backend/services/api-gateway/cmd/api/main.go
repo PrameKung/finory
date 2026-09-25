@@ -19,7 +19,7 @@ func main() {
 	}
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.New(),
+		Handler:           server.New(cfg),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("service listening", "service", "api-gateway", "port", cfg.Port)
