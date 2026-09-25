@@ -88,3 +88,11 @@ func TestAuthServiceHealthRoute(t *testing.T) {
 		t.Fatalf("unexpected auth health response: status=%d, body=%q", response.Code, response.Body.String())
 	}
 }
+
+func TestGatewayHealth(t *testing.T) {
+	response := httptest.NewRecorder()
+	New(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if response.Code != http.StatusOK || response.Body.String() != "{\"status\":\"ok\"}\n" || response.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("unexpected gateway health response: status=%d, body=%q, headers=%v", response.Code, response.Body.String(), response.Header())
+	}
+}

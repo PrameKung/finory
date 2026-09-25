@@ -6,21 +6,28 @@ import (
 
 	"finory/backend/services/api-gateway/internal/config"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/labstack/echo/v5"
 )
 
 // New returns the HTTP handler for this service.
 func New(cfg config.Config) http.Handler {
-	r := chi.NewRouter()
+	e := echo.New()
 	authService := httputil.NewSingleHostReverseProxy(cfg.AuthServiceURL)
-	r.Get("/api/v1/auth/health", http.StripPrefix("/api/v1/auth", authService).ServeHTTP)
-	authProxy := http.StripPrefix("/api/v1", authService)
-	r.Handle("/api/v1/auth", authProxy)
-	r.Handle("/api/v1/auth/*", authProxy)
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("{\"status\":\"ok\"}\n"))
+	e.GET("/api/v1/auth/health", func(c *echo.Context) error {
+		http.StripPrefix("/api/v1/auth", authService).ServeHTTP(c.Response(), c.Request())
+		return nil
 	})
-	return r
+	authProxy := http.StripPrefix("/api/v1", authService)
+	proxyAuth := func(c *echo.Context) error {
+		authProxy.ServeHTTP(c.Response(), c.Request())
+		return nil
+	}
+	e.Any("/api/v1/auth", proxyAuth)
+	e.Any("/api/v1/auth/*", proxyAuth)
+	e.GET("/health", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, struct {
+			Status string `json:"status"`
+		}{Status: "ok"})
+	})
+	return e
 }

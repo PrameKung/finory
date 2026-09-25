@@ -5,27 +5,22 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/labstack/echo/v5"
 )
 
 // New returns the HTTP handler for this service.
 func New(checkDatabase func(context.Context) error) http.Handler {
-	r := chi.NewRouter()
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("{\"status\":\"ok\"}\n"))
+	e := echo.New()
+	e.GET("/health", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
-	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	e.GET("/ready", func(c *echo.Context) error {
+		ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
 		defer cancel()
-		w.Header().Set("Content-Type", "application/json")
 		if err := checkDatabase(ctx); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte("{\"status\":\"unavailable\"}\n"))
-			return
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
 		}
-		_, _ = w.Write([]byte("{\"status\":\"ok\"}\n"))
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
-	return r
+	return e
 }
