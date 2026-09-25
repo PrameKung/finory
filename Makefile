@@ -1,6 +1,6 @@
 .PHONY: help backend-check run-frontend run-api-gateway run-auth-service run-ledger-service run-analytics-service compose-up compose-down compose-logs
 
-COMPOSE := docker compose -f deployments/docker/compose.yaml
+COMPOSE := docker compose --env-file .env.local -f deployments/docker/compose.yaml
 
 help:
 	@echo "Run 'make run-frontend' for Next.js."

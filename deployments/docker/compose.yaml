@@ -7,7 +7,7 @@ services:
         SERVICE: auth-service
     environment:
       PORT: "8081"
-      DATABASE_URL: "${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env}"
+      DATABASE_URL: "${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env.local}"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/health"]
       interval: 5s
@@ -22,7 +22,7 @@ services:
         SERVICE: ledger-service
     environment:
       PORT: "8082"
-      DATABASE_URL: "${LEDGER_DATABASE_URL:?Set LEDGER_DATABASE_URL in .env}"
+      DATABASE_URL: "${LEDGER_DATABASE_URL:?Set LEDGER_DATABASE_URL in .env.local}"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/health"]
       interval: 5s
