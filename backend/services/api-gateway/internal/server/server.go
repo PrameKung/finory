@@ -5,6 +5,7 @@ import (
 	"net/http/httputil"
 
 	"finory/backend/services/api-gateway/internal/config"
+	gatewaymiddleware "finory/backend/services/api-gateway/internal/middleware"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -24,6 +25,7 @@ func New(cfg config.Config) http.Handler {
 		AllowHeaders:  []string{echo.HeaderContentType, echo.HeaderAuthorization, "X-Request-ID"},
 		ExposeHeaders: []string{echo.HeaderXRequestID},
 	}))
+	requireAccessToken := gatewaymiddleware.RequireAccessToken(cfg.JWTAccessSecret)
 	authService := httputil.NewSingleHostReverseProxy(cfg.AuthServiceURL)
 	authService.ModifyResponse = removeUpstreamRequestID
 	e.GET("/api/v1/auth/health", func(c *echo.Context) error {
@@ -35,8 +37,11 @@ func New(cfg config.Config) http.Handler {
 		authProxy.ServeHTTP(c.Response(), c.Request())
 		return nil
 	}
-	e.Any("/api/v1/auth", proxyAuth)
-	e.Any("/api/v1/auth/*", proxyAuth)
+	for _, path := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"} {
+		e.POST(path, proxyAuth)
+	}
+	e.Any("/api/v1/auth", proxyAuth, requireAccessToken)
+	e.Any("/api/v1/auth/*", proxyAuth, requireAccessToken)
 	ledgerService := httputil.NewSingleHostReverseProxy(cfg.LedgerServiceURL)
 	ledgerService.ModifyResponse = removeUpstreamRequestID
 	ledgerProxy := http.StripPrefix("/api/v1", ledgerService)
@@ -46,8 +51,8 @@ func New(cfg config.Config) http.Handler {
 	}
 	for _, resource := range []string{"transactions", "categories", "wallets", "budgets"} {
 		path := "/api/v1/" + resource
-		e.Any(path, proxyLedger)
-		e.Any(path+"/*", proxyLedger)
+		e.Any(path, proxyLedger, requireAccessToken)
+		e.Any(path+"/*", proxyLedger, requireAccessToken)
 	}
 	analyticsService := httputil.NewSingleHostReverseProxy(cfg.AnalyticsServiceURL)
 	analyticsService.ModifyResponse = removeUpstreamRequestID
@@ -60,8 +65,8 @@ func New(cfg config.Config) http.Handler {
 		analyticsProxy.ServeHTTP(c.Response(), c.Request())
 		return nil
 	}
-	e.Any("/api/v1/analytics", proxyAnalytics)
-	e.Any("/api/v1/analytics/*", proxyAnalytics)
+	e.Any("/api/v1/analytics", proxyAnalytics, requireAccessToken)
+	e.Any("/api/v1/analytics/*", proxyAnalytics, requireAccessToken)
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, struct {
 			Status string `json:"status"`

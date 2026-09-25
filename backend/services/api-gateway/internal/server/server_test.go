@@ -7,8 +7,11 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"finory/backend/services/api-gateway/internal/config"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestAuthRoute(t *testing.T) {
@@ -55,7 +58,9 @@ func TestAuthRouteBoundary(t *testing.T) {
 	}
 	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
 	response := httptest.NewRecorder()
-	gateway.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/auth", nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth", nil)
+	request.Header.Set("Authorization", "Bearer "+testAccessToken(t))
+	gateway.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("unexpected auth root status: %d", response.Code)
 	}
@@ -116,11 +121,12 @@ func TestLedgerRoutes(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			token := testAccessToken(t)
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != http.MethodPatch || r.URL.Path != tc.want || r.URL.RawQuery != "page=2" {
 					t.Errorf("unexpected upstream request: %s %s", r.Method, r.URL.String())
 				}
-				if r.Header.Get("Authorization") != "Bearer example" {
+				if r.Header.Get("Authorization") != "Bearer "+token {
 					t.Errorf("authorization header was not forwarded: %q", r.Header.Get("Authorization"))
 				}
 				body, err := io.ReadAll(r.Body)
@@ -139,7 +145,7 @@ func TestLedgerRoutes(t *testing.T) {
 			}
 			gateway := newTestGateway(config.Config{LedgerServiceURL: ledgerURL})
 			request := httptest.NewRequest(http.MethodPatch, tc.path+"?page=2", strings.NewReader(`{"name":"updated"}`))
-			request.Header.Set("Authorization", "Bearer example")
+			request.Header.Set("Authorization", "Bearer "+token)
 			response := httptest.NewRecorder()
 			gateway.ServeHTTP(response, request)
 
@@ -169,11 +175,12 @@ func TestAnalyticsRoutes(t *testing.T) {
 		{path: "/api/v1/analytics/monthly/2026", want: "/analytics/monthly/2026"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
+			token := testAccessToken(t)
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != http.MethodGet || r.URL.Path != tc.want || r.URL.RawQuery != "month=09" {
 					t.Errorf("unexpected upstream request: %s %s", r.Method, r.URL.String())
 				}
-				if r.Header.Get("Authorization") != "Bearer example" {
+				if r.Header.Get("Authorization") != "Bearer "+token {
 					t.Errorf("authorization header was not forwarded: %q", r.Header.Get("Authorization"))
 				}
 				w.Header().Set("Content-Type", "application/json")
@@ -188,7 +195,7 @@ func TestAnalyticsRoutes(t *testing.T) {
 			}
 			gateway := newTestGateway(config.Config{AnalyticsServiceURL: analyticsURL})
 			request := httptest.NewRequest(http.MethodGet, tc.path+"?month=09", nil)
-			request.Header.Set("Authorization", "Bearer example")
+			request.Header.Set("Authorization", "Bearer "+token)
 			response := httptest.NewRecorder()
 			gateway.ServeHTTP(response, request)
 
@@ -230,7 +237,22 @@ func TestAnalyticsRouteBoundary(t *testing.T) {
 
 func newTestGateway(cfg config.Config) http.Handler {
 	cfg.CORSAllowedOrigins = []string{"http://localhost:3000"}
+	cfg.JWTAccessSecret = []byte(testJWTAccessSecret)
 	return New(cfg)
+}
+
+const testJWTAccessSecret = "test-access-secret-with-at-least-32-bytes"
+
+func testAccessToken(t *testing.T) string {
+	t.Helper()
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Subject:   "4c3b9d7e-91ef-4b2b-9e28-2408153715d9",
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+	}).SignedString([]byte(testJWTAccessSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
 }
 
 func TestCORSPreflight(t *testing.T) {
@@ -264,6 +286,7 @@ func TestCORSAllowedAndDisallowedOrigins(t *testing.T) {
 		t.Fatal(err)
 	}
 	gateway := newTestGateway(config.Config{AnalyticsServiceURL: analyticsURL})
+	token := testAccessToken(t)
 	for _, tc := range []struct {
 		origin      string
 		wantAllowed string
@@ -274,6 +297,7 @@ func TestCORSAllowedAndDisallowedOrigins(t *testing.T) {
 		t.Run(tc.origin, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, "/api/v1/analytics/summary", nil)
 			request.Header.Set("Origin", tc.origin)
+			request.Header.Set("Authorization", "Bearer "+token)
 			response := httptest.NewRecorder()
 			gateway.ServeHTTP(response, request)
 			if response.Code != http.StatusAccepted || response.Header().Get("Access-Control-Allow-Origin") != tc.wantAllowed {
@@ -299,6 +323,7 @@ func TestRequestIDPropagatesToServices(t *testing.T) {
 		LedgerServiceURL:    serviceURL,
 		AnalyticsServiceURL: serviceURL,
 	})
+	token := testAccessToken(t)
 
 	for _, path := range []string{
 		"/api/v1/auth/login",
@@ -310,6 +335,7 @@ func TestRequestIDPropagatesToServices(t *testing.T) {
 		for _, suppliedID := range []string{"", "client-id-123"} {
 			t.Run(path+"/"+suppliedID, func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodGet, path, nil)
+				request.Header.Set("Authorization", "Bearer "+token)
 				if suppliedID != "" {
 					request.Header.Set("X-Request-ID", suppliedID)
 				}
@@ -341,6 +367,89 @@ func TestRequestIDOnLocalAndPreflightResponses(t *testing.T) {
 			gateway.ServeHTTP(response, request)
 			if response.Header().Get("X-Request-ID") == "" {
 				t.Fatal("response is missing X-Request-ID")
+			}
+		})
+	}
+}
+
+func TestProtectedRoutesRejectMissingAccessToken(t *testing.T) {
+	gateway := newTestGateway(config.Config{})
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/auth/me"},
+		{method: http.MethodPost, path: "/api/v1/auth/logout"},
+		{method: http.MethodGet, path: "/api/v1/transactions"},
+		{method: http.MethodGet, path: "/api/v1/transactions/123"},
+		{method: http.MethodGet, path: "/api/v1/categories"},
+		{method: http.MethodGet, path: "/api/v1/wallets"},
+		{method: http.MethodGet, path: "/api/v1/budgets"},
+		{method: http.MethodGet, path: "/api/v1/analytics/summary"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, httptest.NewRequest(tc.method, tc.path, nil))
+			if response.Code != http.StatusUnauthorized || response.Header().Get("WWW-Authenticate") != "Bearer" {
+				t.Fatalf("protected route accepted missing token: status=%d, headers=%v", response.Code, response.Header())
+			}
+		})
+	}
+}
+
+func TestProtectedRouteRejectsInvalidAccessTokens(t *testing.T) {
+	sign := func(t *testing.T, method jwt.SigningMethod, claims jwt.RegisteredClaims, secret string) string {
+		t.Helper()
+		token, err := jwt.NewWithClaims(method, claims).SignedString([]byte(secret))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return token
+	}
+	validClaims := jwt.RegisteredClaims{
+		Subject:   "4c3b9d7e-91ef-4b2b-9e28-2408153715d9",
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+	}
+	for _, tc := range []struct {
+		name  string
+		token string
+	}{
+		{name: "malformed", token: "not-a-jwt"},
+		{name: "wrong signature", token: sign(t, jwt.SigningMethodHS256, validClaims, "other-secret-with-at-least-32-bytes")},
+		{name: "wrong algorithm", token: sign(t, jwt.SigningMethodHS384, validClaims, testJWTAccessSecret)},
+		{name: "expired", token: sign(t, jwt.SigningMethodHS256, jwt.RegisteredClaims{Subject: validClaims.Subject, ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour))}, testJWTAccessSecret)},
+		{name: "missing expiry", token: sign(t, jwt.SigningMethodHS256, jwt.RegisteredClaims{Subject: validClaims.Subject}, testJWTAccessSecret)},
+		{name: "missing subject", token: sign(t, jwt.SigningMethodHS256, jwt.RegisteredClaims{ExpiresAt: validClaims.ExpiresAt}, testJWTAccessSecret)},
+		{name: "invalid subject", token: sign(t, jwt.SigningMethodHS256, jwt.RegisteredClaims{Subject: "not-a-uuid", ExpiresAt: validClaims.ExpiresAt}, testJWTAccessSecret)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/transactions", nil)
+			request.Header.Set("Authorization", "Bearer "+tc.token)
+			response := httptest.NewRecorder()
+			newTestGateway(config.Config{}).ServeHTTP(response, request)
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("invalid token was accepted: status=%d, body=%q", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestPublicAuthRoutesDoNotRequireAccessToken(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	authURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
+	for _, path := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"} {
+		t.Run(path, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, nil))
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("public auth route rejected request: status=%d, body=%q", response.Code, response.Body.String())
 			}
 		})
 	}

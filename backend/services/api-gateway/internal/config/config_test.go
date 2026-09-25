@@ -8,11 +8,12 @@ func TestLoad(t *testing.T) {
 	t.Setenv("LEDGER_SERVICE_URL", "")
 	t.Setenv("ANALYTICS_SERVICE_URL", "")
 	t.Setenv("CORS_ALLOWED_ORIGINS", "")
+	t.Setenv("JWT_ACCESS_SECRET", "test-secret-with-at-least-32-bytes-long")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Port != "8080" || cfg.AuthServiceURL.Host != "localhost:8081" || cfg.LedgerServiceURL.Host != "localhost:8082" || cfg.AnalyticsServiceURL.Host != "localhost:8083" || len(cfg.CORSAllowedOrigins) != 2 || cfg.CORSAllowedOrigins[0] != "http://localhost:3000" || cfg.CORSAllowedOrigins[1] != "http://127.0.0.1:3000" {
+	if cfg.Port != "8080" || cfg.AuthServiceURL.Host != "localhost:8081" || cfg.LedgerServiceURL.Host != "localhost:8082" || cfg.AnalyticsServiceURL.Host != "localhost:8083" || len(cfg.CORSAllowedOrigins) != 2 || cfg.CORSAllowedOrigins[0] != "http://localhost:3000" || cfg.CORSAllowedOrigins[1] != "http://127.0.0.1:3000" || string(cfg.JWTAccessSecret) != "test-secret-with-at-least-32-bytes-long" {
 		t.Fatalf("unexpected gateway defaults: %+v", cfg)
 	}
 
@@ -31,6 +32,20 @@ func TestLoad(t *testing.T) {
 	t.Setenv("PORT", "0")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected invalid port to fail")
+	}
+}
+
+func TestLoadRequiresJWTAccessSecret(t *testing.T) {
+	t.Setenv("PORT", "")
+	t.Setenv("AUTH_SERVICE_URL", "")
+	t.Setenv("LEDGER_SERVICE_URL", "")
+	t.Setenv("ANALYTICS_SERVICE_URL", "")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "")
+	for _, secret := range []string{"", "short-secret"} {
+		t.Setenv("JWT_ACCESS_SECRET", secret)
+		if _, err := Load(); err == nil {
+			t.Fatalf("expected JWT secret %q to fail", secret)
+		}
 	}
 }
 

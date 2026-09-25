@@ -14,6 +14,7 @@ type Config struct {
 	LedgerServiceURL    *url.URL
 	AnalyticsServiceURL *url.URL
 	CORSAllowedOrigins  []string
+	JWTAccessSecret     []byte
 }
 
 func Load() (Config, error) {
@@ -41,6 +42,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	jwtAccessSecret := os.Getenv("JWT_ACCESS_SECRET")
+	if len(jwtAccessSecret) < 32 {
+		return Config{}, fmt.Errorf("JWT_ACCESS_SECRET must be at least 32 bytes")
+	}
 
 	return Config{
 		Port:                port,
@@ -48,6 +53,7 @@ func Load() (Config, error) {
 		LedgerServiceURL:    ledgerURL,
 		AnalyticsServiceURL: analyticsURL,
 		CORSAllowedOrigins:  allowedOrigins,
+		JWTAccessSecret:     []byte(jwtAccessSecret),
 	}, nil
 }
 
