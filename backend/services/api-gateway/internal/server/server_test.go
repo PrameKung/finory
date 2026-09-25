@@ -157,3 +157,73 @@ func TestLedgerRouteBoundary(t *testing.T) {
 		t.Fatalf("unrelated route should not be proxied: %d", response.Code)
 	}
 }
+
+func TestAnalyticsRoutes(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{path: "/api/v1/analytics", want: "/analytics"},
+		{path: "/api/v1/analytics/", want: "/analytics/"},
+		{path: "/api/v1/analytics/summary", want: "/analytics/summary"},
+		{path: "/api/v1/analytics/monthly/2026", want: "/analytics/monthly/2026"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != tc.want || r.URL.RawQuery != "month=09" {
+					t.Errorf("unexpected upstream request: %s %s", r.Method, r.URL.String())
+				}
+				if r.Header.Get("Authorization") != "Bearer example" {
+					t.Errorf("authorization header was not forwarded: %q", r.Header.Get("Authorization"))
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_, _ = w.Write([]byte(`{"total":42}`))
+			}))
+			defer upstream.Close()
+
+			analyticsURL, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gateway := New(config.Config{AnalyticsServiceURL: analyticsURL})
+			request := httptest.NewRequest(http.MethodGet, tc.path+"?month=09", nil)
+			request.Header.Set("Authorization", "Bearer example")
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+
+			if response.Code != http.StatusAccepted || response.Body.String() != `{"total":42}` || response.Header().Get("Content-Type") != "application/json" {
+				t.Fatalf("unexpected gateway response: status=%d, body=%q, headers=%v", response.Code, response.Body.String(), response.Header())
+			}
+		})
+	}
+}
+
+func TestAnalyticsServiceHealthRoute(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/health" {
+			t.Errorf("unexpected upstream health request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	analyticsURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	New(config.Config{AnalyticsServiceURL: analyticsURL}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/analytics/health", nil))
+	if response.Code != http.StatusOK || response.Body.String() != `{"status":"ok"}` {
+		t.Fatalf("unexpected analytics health response: status=%d, body=%q", response.Code, response.Body.String())
+	}
+}
+
+func TestAnalyticsRouteBoundary(t *testing.T) {
+	response := httptest.NewRecorder()
+	New(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/analytics-extra", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("unrelated route should not be proxied: %d", response.Code)
+	}
+}
