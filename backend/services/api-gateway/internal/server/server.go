@@ -13,12 +13,19 @@ import (
 // New returns the HTTP handler for this service.
 func New(cfg config.Config) http.Handler {
 	e := echo.New()
+	e.Use(middleware.RequestIDWithConfig(middleware.RequestIDConfig{
+		RequestIDHandler: func(c *echo.Context, requestID string) {
+			c.Request().Header.Set(echo.HeaderXRequestID, requestID)
+		},
+	}))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: cfg.CORSAllowedOrigins,
-		AllowMethods: []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
-		AllowHeaders: []string{echo.HeaderContentType, echo.HeaderAuthorization, "X-Request-ID"},
+		AllowOrigins:  cfg.CORSAllowedOrigins,
+		AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+		AllowHeaders:  []string{echo.HeaderContentType, echo.HeaderAuthorization, "X-Request-ID"},
+		ExposeHeaders: []string{echo.HeaderXRequestID},
 	}))
 	authService := httputil.NewSingleHostReverseProxy(cfg.AuthServiceURL)
+	authService.ModifyResponse = removeUpstreamRequestID
 	e.GET("/api/v1/auth/health", func(c *echo.Context) error {
 		http.StripPrefix("/api/v1/auth", authService).ServeHTTP(c.Response(), c.Request())
 		return nil
@@ -30,7 +37,9 @@ func New(cfg config.Config) http.Handler {
 	}
 	e.Any("/api/v1/auth", proxyAuth)
 	e.Any("/api/v1/auth/*", proxyAuth)
-	ledgerProxy := http.StripPrefix("/api/v1", httputil.NewSingleHostReverseProxy(cfg.LedgerServiceURL))
+	ledgerService := httputil.NewSingleHostReverseProxy(cfg.LedgerServiceURL)
+	ledgerService.ModifyResponse = removeUpstreamRequestID
+	ledgerProxy := http.StripPrefix("/api/v1", ledgerService)
 	proxyLedger := func(c *echo.Context) error {
 		ledgerProxy.ServeHTTP(c.Response(), c.Request())
 		return nil
@@ -41,6 +50,7 @@ func New(cfg config.Config) http.Handler {
 		e.Any(path+"/*", proxyLedger)
 	}
 	analyticsService := httputil.NewSingleHostReverseProxy(cfg.AnalyticsServiceURL)
+	analyticsService.ModifyResponse = removeUpstreamRequestID
 	e.GET("/api/v1/analytics/health", func(c *echo.Context) error {
 		http.StripPrefix("/api/v1/analytics", analyticsService).ServeHTTP(c.Response(), c.Request())
 		return nil
@@ -58,4 +68,9 @@ func New(cfg config.Config) http.Handler {
 		}{Status: "ok"})
 	})
 	return e
+}
+
+func removeUpstreamRequestID(response *http.Response) error {
+	response.Header.Del(echo.HeaderXRequestID)
+	return nil
 }

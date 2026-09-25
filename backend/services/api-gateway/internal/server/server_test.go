@@ -282,3 +282,66 @@ func TestCORSAllowedAndDisallowedOrigins(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestIDPropagatesToServices(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-ID", "upstream-id")
+		_, _ = w.Write([]byte(r.Header.Get("X-Request-ID")))
+	}))
+	defer upstream.Close()
+
+	serviceURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := newTestGateway(config.Config{
+		AuthServiceURL:      serviceURL,
+		LedgerServiceURL:    serviceURL,
+		AnalyticsServiceURL: serviceURL,
+	})
+
+	for _, path := range []string{
+		"/api/v1/auth/login",
+		"/api/v1/auth/health",
+		"/api/v1/transactions",
+		"/api/v1/analytics/summary",
+		"/api/v1/analytics/health",
+	} {
+		for _, suppliedID := range []string{"", "client-id-123"} {
+			t.Run(path+"/"+suppliedID, func(t *testing.T) {
+				request := httptest.NewRequest(http.MethodGet, path, nil)
+				if suppliedID != "" {
+					request.Header.Set("X-Request-ID", suppliedID)
+				}
+				response := httptest.NewRecorder()
+				gateway.ServeHTTP(response, request)
+
+				responseIDs := response.Result().Header.Values("X-Request-ID")
+				if response.Code != http.StatusOK || len(responseIDs) != 1 || responseIDs[0] == "" || response.Body.String() != responseIDs[0] {
+					t.Fatalf("request ID was not propagated: status=%d, response IDs=%v, upstream ID=%q", response.Code, responseIDs, response.Body.String())
+				}
+				if suppliedID != "" && responseIDs[0] != suppliedID {
+					t.Fatalf("provided request ID changed: got %q, want %q", responseIDs[0], suppliedID)
+				}
+			})
+		}
+	}
+}
+
+func TestRequestIDOnLocalAndPreflightResponses(t *testing.T) {
+	gateway := newTestGateway(config.Config{})
+	for _, method := range []string{http.MethodGet, http.MethodOptions} {
+		t.Run(method, func(t *testing.T) {
+			request := httptest.NewRequest(method, "/health", nil)
+			if method == http.MethodOptions {
+				request.Header.Set("Origin", "http://localhost:3000")
+				request.Header.Set("Access-Control-Request-Method", http.MethodGet)
+			}
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+			if response.Header().Get("X-Request-ID") == "" {
+				t.Fatal("response is missing X-Request-ID")
+			}
+		})
+	}
+}
