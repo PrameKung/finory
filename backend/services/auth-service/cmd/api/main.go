@@ -7,9 +7,12 @@ import (
 	"os"
 	"time"
 
+	"finory/backend/services/auth-service/internal/auth"
 	"finory/backend/services/auth-service/internal/config"
 	"finory/backend/services/auth-service/internal/server"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/oauth2"
 )
 
 func main() {
@@ -37,9 +40,24 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("database connected", "database", databaseName)
+	userRepository := auth.NewRepository(pool)
+	authService := auth.NewService(userRepository, cfg.JWTAccessSecret)
+	oauthConfig := oauth2.Config{
+		ClientID: cfg.GoogleClientID, ClientSecret: cfg.GoogleSecret,
+		RedirectURL: cfg.GoogleRedirectURL,
+		Scopes:      []string{"openid", "email", "profile"},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:   "https://accounts.google.com/o/oauth2/v2/auth",
+			TokenURL:  "https://oauth2.googleapis.com/token",
+			AuthStyle: oauth2.AuthStyleInParams,
+		},
+	}
+	keySet := oidc.NewRemoteKeySet(context.Background(), "https://www.googleapis.com/oauth2/v3/certs")
+	verifier := oidc.NewVerifier("https://accounts.google.com", keySet, &oidc.Config{ClientID: cfg.GoogleClientID})
+	authHandler := auth.NewHandler(oauthConfig, verifier, authService, cfg.AppRedirectURL)
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.New(pool.Ping),
+		Handler:           server.New(pool.Ping, authHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("service listening", "service", "auth-service", "port", cfg.Port)

@@ -10,6 +10,11 @@ services:
     environment:
       PORT: "8081"
       DATABASE_URL: "${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env.local}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env.local}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env.local}"
+      GOOGLE_REDIRECT_URL: "${GOOGLE_REDIRECT_URL:?Set GOOGLE_REDIRECT_URL in .env.local}"
+      APP_REDIRECT_URL: "${APP_REDIRECT_URL:?Set APP_REDIRECT_URL in .env.local}"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env.local}"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/health"]
       interval: 5s

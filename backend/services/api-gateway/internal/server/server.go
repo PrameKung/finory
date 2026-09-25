@@ -20,12 +20,13 @@ func New(cfg config.Config) http.Handler {
 		},
 	}))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins:  cfg.CORSAllowedOrigins,
-		AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
-		AllowHeaders:  []string{echo.HeaderContentType, echo.HeaderAuthorization, "X-Request-ID"},
-		ExposeHeaders: []string{echo.HeaderXRequestID},
+		AllowOrigins:     cfg.CORSAllowedOrigins,
+		AllowCredentials: true,
+		AllowMethods:     []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+		AllowHeaders:     []string{echo.HeaderContentType, echo.HeaderAuthorization, "X-Request-ID"},
+		ExposeHeaders:    []string{echo.HeaderXRequestID},
 	}))
-	requireAccessToken := gatewaymiddleware.RequireAccessToken(cfg.JWTAccessSecret)
+	requireAccessToken := gatewaymiddleware.RequireAccessToken(cfg.JWTAccessSecret, cfg.CORSAllowedOrigins)
 	authService := httputil.NewSingleHostReverseProxy(cfg.AuthServiceURL)
 	authService.ModifyResponse = removeUpstreamRequestID
 	e.GET("/api/v1/auth/health", func(c *echo.Context) error {
@@ -37,8 +38,8 @@ func New(cfg config.Config) http.Handler {
 		authProxy.ServeHTTP(c.Response(), c.Request())
 		return nil
 	}
-	for _, path := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"} {
-		e.POST(path, proxyAuth)
+	for _, path := range []string{"/api/v1/auth/google", "/api/v1/auth/google/callback"} {
+		e.GET(path, proxyAuth)
 	}
 	e.Any("/api/v1/auth", proxyAuth, requireAccessToken)
 	e.Any("/api/v1/auth/*", proxyAuth, requireAccessToken)

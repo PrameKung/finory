@@ -10,7 +10,7 @@ import (
 )
 
 // RequireAccessToken verifies access tokens before a request reaches a service.
-func RequireAccessToken(secret []byte) echo.MiddlewareFunc {
+func RequireAccessToken(secret []byte, allowedOrigins []string) echo.MiddlewareFunc {
 	if len(secret) < 32 {
 		panic("JWT access secret must be at least 32 bytes")
 	}
@@ -23,16 +23,38 @@ func RequireAccessToken(secret []byte) echo.MiddlewareFunc {
 			}
 
 			authorization := c.Request().Header.Values(echo.HeaderAuthorization)
-			if len(authorization) != 1 {
-				return unauthorized()
-			}
-			parts := strings.Fields(authorization[0])
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			var rawToken string
+			if len(authorization) == 0 {
+				cookie, err := c.Cookie("finory_access")
+				if err != nil {
+					return unauthorized()
+				}
+				if c.Request().Method != http.MethodGet && c.Request().Method != http.MethodHead && c.Request().Method != http.MethodOptions {
+					origin := c.Request().Header.Get("Origin")
+					allowed := false
+					for _, candidate := range allowedOrigins {
+						if origin == candidate {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						return unauthorized()
+					}
+				}
+				rawToken = cookie.Value
+			} else if len(authorization) == 1 {
+				parts := strings.Fields(authorization[0])
+				if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+					return unauthorized()
+				}
+				rawToken = parts[1]
+			} else {
 				return unauthorized()
 			}
 
 			claims := &jwt.RegisteredClaims{}
-			token, err := jwt.ParseWithClaims(parts[1], claims, func(*jwt.Token) (any, error) {
+			token, err := jwt.ParseWithClaims(rawToken, claims, func(*jwt.Token) (any, error) {
 				return secret, nil
 			}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired(), jwt.WithStrictDecoding())
 			if err != nil || !token.Valid {

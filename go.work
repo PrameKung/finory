@@ -1,4 +1,4 @@
-go 1.26
+go 1.26.0
 
 use (
 	./backend/services/api-gateway
@@ -6,4 +6,3 @@ use (
 	./backend/services/ledger-service
 	./backend/services/analytics-service
 )
-

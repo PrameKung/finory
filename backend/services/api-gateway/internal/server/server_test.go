@@ -16,15 +16,11 @@ import (
 
 func TestAuthRoute(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/auth/login" || r.URL.RawQuery != "next=dashboard" {
+		if r.Method != http.MethodGet || r.URL.Path != "/auth/google" || r.URL.RawQuery != "next=dashboard" {
 			t.Errorf("unexpected upstream request: %s %s", r.Method, r.URL.String())
 		}
-		body, err := io.ReadAll(r.Body)
-		if err != nil || string(body) != `{"email":"user@example.com"}` {
-			t.Errorf("unexpected upstream body: %q, error: %v", body, err)
-		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"token":"example"}`))
 	}))
 	defer upstream.Close()
@@ -34,11 +30,11 @@ func TestAuthRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login?next=dashboard", strings.NewReader(`{"email":"user@example.com"}`))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/google?next=dashboard", nil)
 	response := httptest.NewRecorder()
 	gateway.ServeHTTP(response, request)
 
-	if response.Code != http.StatusCreated || response.Body.String() != `{"token":"example"}` || response.Header().Get("Content-Type") != "application/json" {
+	if response.Code != http.StatusOK || response.Body.String() != `{"token":"example"}` || response.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("unexpected gateway response: status=%d, body=%q, headers=%v", response.Code, response.Body.String(), response.Header())
 	}
 }
@@ -256,7 +252,7 @@ func testAccessToken(t *testing.T) string {
 }
 
 func TestCORSPreflight(t *testing.T) {
-	for _, path := range []string{"/api/v1/auth/login", "/api/v1/transactions", "/api/v1/analytics/summary"} {
+	for _, path := range []string{"/api/v1/auth/google", "/api/v1/transactions", "/api/v1/analytics/summary"} {
 		t.Run(path, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodOptions, path, nil)
 			request.Header.Set("Origin", "http://localhost:3000")
@@ -326,7 +322,7 @@ func TestRequestIDPropagatesToServices(t *testing.T) {
 	token := testAccessToken(t)
 
 	for _, path := range []string{
-		"/api/v1/auth/login",
+		"/api/v1/auth/google",
 		"/api/v1/auth/health",
 		"/api/v1/transactions",
 		"/api/v1/analytics/summary",
@@ -444,12 +440,46 @@ func TestPublicAuthRoutesDoNotRequireAccessToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
-	for _, path := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"} {
+	for _, path := range []string{"/api/v1/auth/google", "/api/v1/auth/google/callback"} {
 		t.Run(path, func(t *testing.T) {
 			response := httptest.NewRecorder()
-			gateway.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, nil))
+			gateway.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
 			if response.Code != http.StatusNoContent {
 				t.Fatalf("public auth route rejected request: status=%d, body=%q", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestGatewayAcceptsSessionCookieAndChecksOriginForWrites(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	ledgerURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := newTestGateway(config.Config{LedgerServiceURL: ledgerURL})
+	for _, tc := range []struct {
+		name, method, origin string
+		want                 int
+	}{
+		{name: "read", method: http.MethodGet, want: http.StatusNoContent},
+		{name: "allowed write", method: http.MethodPost, origin: "http://localhost:3000", want: http.StatusNoContent},
+		{name: "missing write origin", method: http.MethodPost, want: http.StatusUnauthorized},
+		{name: "foreign write origin", method: http.MethodPost, origin: "https://other.example.com", want: http.StatusUnauthorized},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(tc.method, "/api/v1/transactions", nil)
+			request.AddCookie(&http.Cookie{Name: "finory_access", Value: testAccessToken(t)})
+			if tc.origin != "" {
+				request.Header.Set("Origin", tc.origin)
+			}
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+			if response.Code != tc.want {
+				t.Fatalf("status = %d, want %d", response.Code, tc.want)
 			}
 		})
 	}
