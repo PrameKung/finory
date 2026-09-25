@@ -96,3 +96,64 @@ func TestGatewayHealth(t *testing.T) {
 		t.Fatalf("unexpected gateway health response: status=%d, body=%q, headers=%v", response.Code, response.Body.String(), response.Header())
 	}
 }
+
+func TestLedgerRoutes(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "transactions root", path: "/api/v1/transactions", want: "/transactions"},
+		{name: "transactions trailing slash", path: "/api/v1/transactions/", want: "/transactions/"},
+		{name: "transaction ID", path: "/api/v1/transactions/123", want: "/transactions/123"},
+		{name: "categories root", path: "/api/v1/categories", want: "/categories"},
+		{name: "category ID", path: "/api/v1/categories/123", want: "/categories/123"},
+		{name: "wallets root", path: "/api/v1/wallets", want: "/wallets"},
+		{name: "wallet ID", path: "/api/v1/wallets/123", want: "/wallets/123"},
+		{name: "budgets root", path: "/api/v1/budgets", want: "/budgets"},
+		{name: "budget ID", path: "/api/v1/budgets/123", want: "/budgets/123"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPatch || r.URL.Path != tc.want || r.URL.RawQuery != "page=2" {
+					t.Errorf("unexpected upstream request: %s %s", r.Method, r.URL.String())
+				}
+				if r.Header.Get("Authorization") != "Bearer example" {
+					t.Errorf("authorization header was not forwarded: %q", r.Header.Get("Authorization"))
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil || string(body) != `{"name":"updated"}` {
+					t.Errorf("unexpected upstream body: %q, error: %v", body, err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_, _ = w.Write([]byte(`{"saved":true}`))
+			}))
+			defer upstream.Close()
+
+			ledgerURL, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gateway := New(config.Config{LedgerServiceURL: ledgerURL})
+			request := httptest.NewRequest(http.MethodPatch, tc.path+"?page=2", strings.NewReader(`{"name":"updated"}`))
+			request.Header.Set("Authorization", "Bearer example")
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+
+			if response.Code != http.StatusAccepted || response.Body.String() != `{"saved":true}` || response.Header().Get("Content-Type") != "application/json" {
+				t.Fatalf("unexpected gateway response: status=%d, body=%q, headers=%v", response.Code, response.Body.String(), response.Header())
+			}
+		})
+	}
+}
+
+func TestLedgerRouteBoundary(t *testing.T) {
+	response := httptest.NewRecorder()
+	New(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/transactions-extra", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("unrelated route should not be proxied: %d", response.Code)
+	}
+}
