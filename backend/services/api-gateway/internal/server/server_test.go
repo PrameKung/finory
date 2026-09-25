@@ -30,7 +30,7 @@ func TestAuthRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gateway := New(config.Config{AuthServiceURL: authURL})
+	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login?next=dashboard", strings.NewReader(`{"email":"user@example.com"}`))
 	response := httptest.NewRecorder()
 	gateway.ServeHTTP(response, request)
@@ -53,7 +53,7 @@ func TestAuthRouteBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gateway := New(config.Config{AuthServiceURL: authURL})
+	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
 	response := httptest.NewRecorder()
 	gateway.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/auth", nil))
 	if response.Code != http.StatusNoContent {
@@ -81,7 +81,7 @@ func TestAuthServiceHealthRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gateway := New(config.Config{AuthServiceURL: authURL})
+	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
 	response := httptest.NewRecorder()
 	gateway.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/auth/health", nil))
 	if response.Code != http.StatusOK || response.Body.String() != `{"status":"ok"}` {
@@ -91,7 +91,7 @@ func TestAuthServiceHealthRoute(t *testing.T) {
 
 func TestGatewayHealth(t *testing.T) {
 	response := httptest.NewRecorder()
-	New(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health", nil))
+	newTestGateway(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health", nil))
 	if response.Code != http.StatusOK || response.Body.String() != "{\"status\":\"ok\"}\n" || response.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("unexpected gateway health response: status=%d, body=%q, headers=%v", response.Code, response.Body.String(), response.Header())
 	}
@@ -137,7 +137,7 @@ func TestLedgerRoutes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			gateway := New(config.Config{LedgerServiceURL: ledgerURL})
+			gateway := newTestGateway(config.Config{LedgerServiceURL: ledgerURL})
 			request := httptest.NewRequest(http.MethodPatch, tc.path+"?page=2", strings.NewReader(`{"name":"updated"}`))
 			request.Header.Set("Authorization", "Bearer example")
 			response := httptest.NewRecorder()
@@ -152,7 +152,7 @@ func TestLedgerRoutes(t *testing.T) {
 
 func TestLedgerRouteBoundary(t *testing.T) {
 	response := httptest.NewRecorder()
-	New(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/transactions-extra", nil))
+	newTestGateway(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/transactions-extra", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("unrelated route should not be proxied: %d", response.Code)
 	}
@@ -186,7 +186,7 @@ func TestAnalyticsRoutes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			gateway := New(config.Config{AnalyticsServiceURL: analyticsURL})
+			gateway := newTestGateway(config.Config{AnalyticsServiceURL: analyticsURL})
 			request := httptest.NewRequest(http.MethodGet, tc.path+"?month=09", nil)
 			request.Header.Set("Authorization", "Bearer example")
 			response := httptest.NewRecorder()
@@ -214,7 +214,7 @@ func TestAnalyticsServiceHealthRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	New(config.Config{AnalyticsServiceURL: analyticsURL}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/analytics/health", nil))
+	newTestGateway(config.Config{AnalyticsServiceURL: analyticsURL}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/analytics/health", nil))
 	if response.Code != http.StatusOK || response.Body.String() != `{"status":"ok"}` {
 		t.Fatalf("unexpected analytics health response: status=%d, body=%q", response.Code, response.Body.String())
 	}
@@ -222,8 +222,63 @@ func TestAnalyticsServiceHealthRoute(t *testing.T) {
 
 func TestAnalyticsRouteBoundary(t *testing.T) {
 	response := httptest.NewRecorder()
-	New(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/analytics-extra", nil))
+	newTestGateway(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/analytics-extra", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("unrelated route should not be proxied: %d", response.Code)
+	}
+}
+
+func newTestGateway(cfg config.Config) http.Handler {
+	cfg.CORSAllowedOrigins = []string{"http://localhost:3000"}
+	return New(cfg)
+}
+
+func TestCORSPreflight(t *testing.T) {
+	for _, path := range []string{"/api/v1/auth/login", "/api/v1/transactions", "/api/v1/analytics/summary"} {
+		t.Run(path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodOptions, path, nil)
+			request.Header.Set("Origin", "http://localhost:3000")
+			request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			request.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
+			response := httptest.NewRecorder()
+			newTestGateway(config.Config{}).ServeHTTP(response, request)
+
+			if response.Code != http.StatusNoContent || response.Header().Get("Access-Control-Allow-Origin") != "http://localhost:3000" {
+				t.Fatalf("unexpected preflight response: status=%d, headers=%v", response.Code, response.Header())
+			}
+			if !strings.Contains(response.Header().Get("Access-Control-Allow-Methods"), http.MethodPost) || !strings.Contains(response.Header().Get("Access-Control-Allow-Headers"), "Authorization") {
+				t.Fatalf("preflight methods or headers missing: %v", response.Header())
+			}
+		})
+	}
+}
+
+func TestCORSAllowedAndDisallowedOrigins(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer upstream.Close()
+
+	analyticsURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := newTestGateway(config.Config{AnalyticsServiceURL: analyticsURL})
+	for _, tc := range []struct {
+		origin      string
+		wantAllowed string
+	}{
+		{origin: "http://localhost:3000", wantAllowed: "http://localhost:3000"},
+		{origin: "https://other.example.com"},
+	} {
+		t.Run(tc.origin, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/analytics/summary", nil)
+			request.Header.Set("Origin", tc.origin)
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+			if response.Code != http.StatusAccepted || response.Header().Get("Access-Control-Allow-Origin") != tc.wantAllowed {
+				t.Fatalf("unexpected CORS response: status=%d, headers=%v", response.Code, response.Header())
+			}
+		})
 	}
 }

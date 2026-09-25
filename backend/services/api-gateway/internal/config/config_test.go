@@ -7,11 +7,12 @@ func TestLoad(t *testing.T) {
 	t.Setenv("AUTH_SERVICE_URL", "")
 	t.Setenv("LEDGER_SERVICE_URL", "")
 	t.Setenv("ANALYTICS_SERVICE_URL", "")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Port != "8080" || cfg.AuthServiceURL.Host != "localhost:8081" || cfg.LedgerServiceURL.Host != "localhost:8082" || cfg.AnalyticsServiceURL.Host != "localhost:8083" {
+	if cfg.Port != "8080" || cfg.AuthServiceURL.Host != "localhost:8081" || cfg.LedgerServiceURL.Host != "localhost:8082" || cfg.AnalyticsServiceURL.Host != "localhost:8083" || len(cfg.CORSAllowedOrigins) != 2 || cfg.CORSAllowedOrigins[0] != "http://localhost:3000" || cfg.CORSAllowedOrigins[1] != "http://127.0.0.1:3000" {
 		t.Fatalf("unexpected gateway defaults: %+v", cfg)
 	}
 
@@ -30,5 +31,20 @@ func TestLoad(t *testing.T) {
 	t.Setenv("PORT", "0")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected invalid port to fail")
+	}
+}
+
+func TestCORSAllowedOrigins(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com, https://admin.example.com")
+	origins, err := corsAllowedOrigins()
+	if err != nil || len(origins) != 2 || origins[0] != "https://app.example.com" || origins[1] != "https://admin.example.com" {
+		t.Fatalf("unexpected CORS origins: %v, error: %v", origins, err)
+	}
+
+	for _, invalid := range []string{"*", "https://app.example.com/path", "https://app.example.com,", "ftp://app.example.com"} {
+		t.Setenv("CORS_ALLOWED_ORIGINS", invalid)
+		if _, err := corsAllowedOrigins(); err == nil {
+			t.Errorf("expected invalid CORS origin %q to fail", invalid)
+		}
 	}
 }

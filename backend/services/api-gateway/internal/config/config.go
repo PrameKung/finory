@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -12,6 +13,7 @@ type Config struct {
 	AuthServiceURL      *url.URL
 	LedgerServiceURL    *url.URL
 	AnalyticsServiceURL *url.URL
+	CORSAllowedOrigins  []string
 }
 
 func Load() (Config, error) {
@@ -35,13 +37,35 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	allowedOrigins, err := corsAllowedOrigins()
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
 		Port:                port,
 		AuthServiceURL:      authURL,
 		LedgerServiceURL:    ledgerURL,
 		AnalyticsServiceURL: analyticsURL,
+		CORSAllowedOrigins:  allowedOrigins,
 	}, nil
+}
+
+func corsAllowedOrigins() ([]string, error) {
+	raw := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if raw == "" {
+		raw = "http://localhost:3000,http://127.0.0.1:3000"
+	}
+	origins := strings.Split(raw, ",")
+	for i, origin := range origins {
+		origin = strings.TrimSpace(origin)
+		parsed, err := url.Parse(origin)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return nil, fmt.Errorf("CORS_ALLOWED_ORIGINS must contain only HTTP(S) origins")
+		}
+		origins[i] = origin
+	}
+	return origins, nil
 }
 
 func validatePort(port string) error {

@@ -7,11 +7,17 @@ import (
 	"finory/backend/services/api-gateway/internal/config"
 
 	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 )
 
 // New returns the HTTP handler for this service.
 func New(cfg config.Config) http.Handler {
 	e := echo.New()
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: cfg.CORSAllowedOrigins,
+		AllowMethods: []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+		AllowHeaders: []string{echo.HeaderContentType, echo.HeaderAuthorization, "X-Request-ID"},
+	}))
 	authService := httputil.NewSingleHostReverseProxy(cfg.AuthServiceURL)
 	e.GET("/api/v1/auth/health", func(c *echo.Context) error {
 		http.StripPrefix("/api/v1/auth", authService).ServeHTTP(c.Response(), c.Request())
