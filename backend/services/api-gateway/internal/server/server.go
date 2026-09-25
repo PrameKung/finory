@@ -42,6 +42,14 @@ func New(cfg config.Config) http.Handler {
 	for _, path := range []string{"/api/v1/auth/google", "/api/v1/auth/google/callback"} {
 		e.GET(path, proxyAuth)
 	}
+	e.POST("/api/v1/auth/refresh", proxyAuth, func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			if !slices.Contains(cfg.CORSAllowedOrigins, c.Request().Header.Get("Origin")) {
+				return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden_origin"})
+			}
+			return next(c)
+		}
+	})
 	e.POST("/api/v1/auth/logout", proxyAuth, func(next echo.HandlerFunc) echo.HandlerFunc {
 		requireToken := requireAccessToken(next)
 		return func(c *echo.Context) error {

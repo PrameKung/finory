@@ -17,6 +17,7 @@ import (
 
 const flowCookieName = "finory_oauth"
 const accessCookieName = "finory_access"
+const refreshCookieName = "finory_refresh"
 
 type TokenVerifier interface {
 	Verify(context.Context, string) (*oidc.IDToken, error)
@@ -41,20 +42,44 @@ func NewHandler(oauth oauth2.Config, verifier TokenVerifier, service *Service, a
 func (h *Handler) Register(e *echo.Echo) {
 	e.GET("/auth/google", h.authorize)
 	e.GET("/auth/google/callback", h.callback)
+	e.POST("/auth/refresh", h.refresh)
 	e.POST("/auth/logout", h.logout)
 }
 
 func (h *Handler) logout(c *echo.Context) error {
+	if cookie, err := c.Cookie(refreshCookieName); err == nil {
+		ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+		defer cancel()
+		if err := h.service.Logout(ctx, cookie.Value); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "logout_failed"})
+		}
+	}
 	for _, cookie := range []struct{ name, path string }{
 		{name: accessCookieName, path: "/api/v1"},
+		{name: refreshCookieName, path: "/api/v1/auth"},
 		{name: flowCookieName, path: "/api/v1/auth/google"},
 	} {
-		c.SetCookie(&http.Cookie{
-			Name: cookie.name, Path: cookie.path, MaxAge: -1,
-			Expires: time.Unix(0, 0), HttpOnly: true,
-			Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
-		})
+		h.clearCookie(c, cookie.name, cookie.path)
 	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *Handler) refresh(c *echo.Context) error {
+	cookie, err := c.Cookie(refreshCookieName)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid_session"})
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	tokens, err := h.service.Renew(ctx, cookie.Value)
+	if errors.Is(err, ErrInvalidSession) {
+		h.clearCookie(c, refreshCookieName, "/api/v1/auth")
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid_session"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "refresh_failed"})
+	}
+	h.setSessionCookies(c, tokens)
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -118,7 +143,7 @@ func (h *Handler) callback(c *echo.Context) error {
 	if err := idToken.Claims(&claims); err != nil {
 		return invalidCallback(c)
 	}
-	accessToken, err := h.service.SignIn(ctx, GoogleUser{
+	tokens, err := h.service.SignIn(ctx, GoogleUser{
 		Subject: idToken.Subject, Email: claims.Email,
 		DisplayName: claims.Name, AvatarURL: claims.Picture,
 	}, claims.EmailVerified)
@@ -128,11 +153,32 @@ func (h *Handler) callback(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "sign_in_failed"})
 	}
-	c.SetCookie(&http.Cookie{
-		Name: accessCookieName, Value: accessToken, Path: "/api/v1",
-		MaxAge: 3600, HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
-	})
+	h.setSessionCookies(c, tokens)
 	return c.Redirect(http.StatusSeeOther, h.appRedirectURL)
+}
+
+func (h *Handler) setSessionCookies(c *echo.Context, tokens SessionTokens) {
+	for _, cookie := range []struct {
+		name, value, path string
+		maxAge            int
+	}{
+		{name: accessCookieName, value: tokens.AccessToken, path: "/api/v1", maxAge: int(accessTokenTTL.Seconds())},
+		{name: refreshCookieName, value: tokens.RefreshToken, path: "/api/v1/auth", maxAge: int(refreshTokenTTL.Seconds())},
+	} {
+		c.SetCookie(&http.Cookie{
+			Name: cookie.name, Value: cookie.value, Path: cookie.path,
+			MaxAge: cookie.maxAge, HttpOnly: true,
+			Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
+		})
+	}
+}
+
+func (h *Handler) clearCookie(c *echo.Context, name, path string) {
+	c.SetCookie(&http.Cookie{
+		Name: name, Path: path, MaxAge: -1,
+		Expires: time.Unix(0, 0), HttpOnly: true,
+		Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func randomValue() (string, error) {

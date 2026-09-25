@@ -528,3 +528,39 @@ func TestLogoutProxiesWithAllowedOriginOrBearerToken(t *testing.T) {
 		})
 	}
 }
+
+func TestRefreshRequiresAllowedOriginAndDoesNotRequireAccessToken(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/auth/refresh" {
+			t.Errorf("unexpected refresh request: %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	authURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
+	for _, tc := range []struct {
+		name, origin string
+		want         int
+	}{
+		{name: "allowed", origin: "http://localhost:3000", want: http.StatusNoContent},
+		{name: "missing origin", want: http.StatusForbidden},
+		{name: "foreign origin", origin: "https://other.example.com", want: http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+			request.AddCookie(&http.Cookie{Name: "finory_refresh", Value: "opaque-token"})
+			if tc.origin != "" {
+				request.Header.Set("Origin", tc.origin)
+			}
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+			if response.Code != tc.want {
+				t.Fatalf("refresh status = %d, want %d", response.Code, tc.want)
+			}
+		})
+	}
+}

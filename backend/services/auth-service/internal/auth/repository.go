@@ -5,6 +5,7 @@ import (
 
 	"finory/backend/services/auth-service/internal/database"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,4 +32,24 @@ func (r *Repository) UpsertGoogleUser(ctx context.Context, user GoogleUser) (str
 		DisplayName:   user.DisplayName,
 		AvatarUrl:     user.AvatarURL,
 	})
+}
+
+func (r *Repository) CreateRefreshSession(ctx context.Context, userID string, tokenHash []byte) error {
+	var id pgtype.UUID
+	if err := id.Scan(userID); err != nil {
+		return err
+	}
+	return r.queries.CreateRefreshSession(ctx, database.CreateRefreshSessionParams{
+		UserID: id, TokenHash: tokenHash,
+	})
+}
+
+func (r *Repository) RotateRefreshSession(ctx context.Context, oldHash, newHash []byte) (string, error) {
+	return r.queries.RotateRefreshSession(ctx, database.RotateRefreshSessionParams{
+		OldTokenHash: oldHash, NewTokenHash: newHash,
+	})
+}
+
+func (r *Repository) DeleteRefreshSession(ctx context.Context, tokenHash []byte) error {
+	return r.queries.DeleteRefreshSession(ctx, tokenHash)
 }

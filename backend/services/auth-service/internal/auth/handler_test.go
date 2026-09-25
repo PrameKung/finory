@@ -16,6 +16,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v5"
 	"golang.org/x/oauth2"
 )
@@ -25,8 +26,39 @@ const testUserID = "4c3b9d7e-91ef-4b2b-9e28-2408153715d9"
 
 type memoryUsers struct {
 	ids      map[string]string
+	sessions map[[32]byte]string
 	upserts  int
 	lastUser GoogleUser
+}
+
+func (m *memoryUsers) CreateRefreshSession(_ context.Context, userID string, hash []byte) error {
+	if m.sessions == nil {
+		m.sessions = make(map[[32]byte]string)
+	}
+	var key [32]byte
+	copy(key[:], hash)
+	m.sessions[key] = userID
+	return nil
+}
+
+func (m *memoryUsers) RotateRefreshSession(_ context.Context, oldHash, newHash []byte) (string, error) {
+	var oldKey, newKey [32]byte
+	copy(oldKey[:], oldHash)
+	copy(newKey[:], newHash)
+	userID, ok := m.sessions[oldKey]
+	if !ok {
+		return "", pgx.ErrNoRows
+	}
+	delete(m.sessions, oldKey)
+	m.sessions[newKey] = userID
+	return userID, nil
+}
+
+func (m *memoryUsers) DeleteRefreshSession(_ context.Context, hash []byte) error {
+	var key [32]byte
+	copy(key[:], hash)
+	delete(m.sessions, key)
+	return nil
 }
 
 func (m *memoryUsers) UpsertGoogleUser(_ context.Context, user GoogleUser) (string, error) {
@@ -170,6 +202,15 @@ func TestGoogleOAuthCreatesAndReusesUser(t *testing.T) {
 		if access == nil || !access.HttpOnly || access.Path != "/api/v1" {
 			t.Fatalf("missing application session cookie: %+v", response.Result().Cookies())
 		}
+		var refresh *http.Cookie
+		for _, candidate := range response.Result().Cookies() {
+			if candidate.Name == refreshCookieName {
+				refresh = candidate
+			}
+		}
+		if refresh == nil || !refresh.HttpOnly || refresh.Path != "/api/v1/auth" || refresh.Value == "" {
+			t.Fatalf("missing refresh cookie: %+v", response.Result().Cookies())
+		}
 		claims := &jwt.RegisteredClaims{}
 		parsed, err := jwt.ParseWithClaims(access.Value, claims, func(*jwt.Token) (any, error) {
 			return []byte(testSecret), nil
@@ -235,10 +276,10 @@ func TestLogoutClearsSessionAndPendingOAuthCookies(t *testing.T) {
 				t.Fatalf("logout status = %d", response.Code)
 			}
 			cookies := response.Result().Cookies()
-			if len(cookies) != 2 {
+			if len(cookies) != 3 {
 				t.Fatalf("logout cookies = %+v", cookies)
 			}
-			paths := map[string]string{accessCookieName: "/api/v1", flowCookieName: "/api/v1/auth/google"}
+			paths := map[string]string{accessCookieName: "/api/v1", refreshCookieName: "/api/v1/auth", flowCookieName: "/api/v1/auth/google"}
 			for _, cookie := range cookies {
 				if cookie.Path != paths[cookie.Name] || cookie.MaxAge >= 0 || cookie.Value != "" ||
 					!cookie.HttpOnly || cookie.Secure != test.secure || cookie.SameSite != http.SameSiteLaxMode {
@@ -246,5 +287,59 @@ func TestLogoutClearsSessionAndPendingOAuthCookies(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRefreshRotatesTokenAndLogoutRevokesIt(t *testing.T) {
+	f := newOAuthFixture(t)
+	flowCookie, nonce := f.start(t)
+	f.signIDToken(t, nonce)
+	state := strings.Split(flowCookie.Value, ".")[0]
+	signIn := f.callback(flowCookie, "code=good-code&state="+url.QueryEscape(state))
+	if signIn.Code != http.StatusSeeOther {
+		t.Fatalf("sign-in status = %d", signIn.Code)
+	}
+	var original *http.Cookie
+	for _, cookie := range signIn.Result().Cookies() {
+		if cookie.Name == refreshCookieName {
+			original = cookie
+		}
+	}
+	if original == nil || len(f.users.sessions) != 1 {
+		t.Fatalf("refresh session was not created: cookies=%v, sessions=%d", signIn.Result().Cookies(), len(f.users.sessions))
+	}
+	call := func(path string, cookie *http.Cookie) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, path, nil)
+		if cookie != nil {
+			request.AddCookie(cookie)
+		}
+		response := httptest.NewRecorder()
+		f.handler.ServeHTTP(response, request)
+		return response
+	}
+	renewed := call("/auth/refresh", original)
+	if renewed.Code != http.StatusNoContent || len(f.users.sessions) != 1 {
+		t.Fatalf("refresh status = %d, sessions = %d", renewed.Code, len(f.users.sessions))
+	}
+	var rotated *http.Cookie
+	for _, cookie := range renewed.Result().Cookies() {
+		if cookie.Name == refreshCookieName {
+			rotated = cookie
+		}
+	}
+	if rotated == nil || rotated.Value == original.Value || rotated.Path != "/api/v1/auth" {
+		t.Fatalf("refresh token was not rotated: %+v", rotated)
+	}
+	if replay := call("/auth/refresh", original); replay.Code != http.StatusUnauthorized {
+		t.Fatalf("old refresh token replay status = %d", replay.Code)
+	}
+	if missing := call("/auth/refresh", nil); missing.Code != http.StatusUnauthorized {
+		t.Fatalf("missing refresh token status = %d", missing.Code)
+	}
+	if logout := call("/auth/logout", rotated); logout.Code != http.StatusNoContent || len(f.users.sessions) != 0 {
+		t.Fatalf("logout status = %d, sessions = %d", logout.Code, len(f.users.sessions))
+	}
+	if revoked := call("/auth/refresh", rotated); revoked.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked refresh token status = %d", revoked.Code)
 	}
 }
