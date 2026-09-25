@@ -217,3 +217,34 @@ func TestGoogleOAuthRejectsInvalidCallbacks(t *testing.T) {
 		})
 	}
 }
+
+func TestLogoutClearsSessionAndPendingOAuthCookies(t *testing.T) {
+	for _, test := range []struct {
+		name, redirectURL string
+		secure            bool
+	}{
+		{name: "local HTTP", redirectURL: "http://localhost:8080/api/v1/auth/google/callback"},
+		{name: "production HTTPS", redirectURL: "https://api.example.com/api/v1/auth/google/callback", secure: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			e := echo.New()
+			NewHandler(oauth2.Config{RedirectURL: test.redirectURL}, nil, nil, "").Register(e)
+			response := httptest.NewRecorder()
+			e.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("logout status = %d", response.Code)
+			}
+			cookies := response.Result().Cookies()
+			if len(cookies) != 2 {
+				t.Fatalf("logout cookies = %+v", cookies)
+			}
+			paths := map[string]string{accessCookieName: "/api/v1", flowCookieName: "/api/v1/auth/google"}
+			for _, cookie := range cookies {
+				if cookie.Path != paths[cookie.Name] || cookie.MaxAge >= 0 || cookie.Value != "" ||
+					!cookie.HttpOnly || cookie.Secure != test.secure || cookie.SameSite != http.SameSiteLaxMode {
+					t.Fatalf("cookie was not cleared: %+v", cookie)
+				}
+			}
+		})
+	}
+}

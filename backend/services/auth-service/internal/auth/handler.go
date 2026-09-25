@@ -41,6 +41,21 @@ func NewHandler(oauth oauth2.Config, verifier TokenVerifier, service *Service, a
 func (h *Handler) Register(e *echo.Echo) {
 	e.GET("/auth/google", h.authorize)
 	e.GET("/auth/google/callback", h.callback)
+	e.POST("/auth/logout", h.logout)
+}
+
+func (h *Handler) logout(c *echo.Context) error {
+	for _, cookie := range []struct{ name, path string }{
+		{name: accessCookieName, path: "/api/v1"},
+		{name: flowCookieName, path: "/api/v1/auth/google"},
+	} {
+		c.SetCookie(&http.Cookie{
+			Name: cookie.name, Path: cookie.path, MaxAge: -1,
+			Expires: time.Unix(0, 0), HttpOnly: true,
+			Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (h *Handler) authorize(c *echo.Context) error {

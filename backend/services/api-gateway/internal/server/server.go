@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httputil"
+	"slices"
 
 	"finory/backend/services/api-gateway/internal/config"
 	gatewaymiddleware "finory/backend/services/api-gateway/internal/middleware"
@@ -41,6 +42,15 @@ func New(cfg config.Config) http.Handler {
 	for _, path := range []string{"/api/v1/auth/google", "/api/v1/auth/google/callback"} {
 		e.GET(path, proxyAuth)
 	}
+	e.POST("/api/v1/auth/logout", proxyAuth, func(next echo.HandlerFunc) echo.HandlerFunc {
+		requireToken := requireAccessToken(next)
+		return func(c *echo.Context) error {
+			if slices.Contains(cfg.CORSAllowedOrigins, c.Request().Header.Get("Origin")) {
+				return next(c)
+			}
+			return requireToken(c)
+		}
+	})
 	e.Any("/api/v1/auth", proxyAuth, requireAccessToken)
 	e.Any("/api/v1/auth/*", proxyAuth, requireAccessToken)
 	ledgerService := httputil.NewSingleHostReverseProxy(cfg.LedgerServiceURL)

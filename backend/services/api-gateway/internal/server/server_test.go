@@ -484,3 +484,47 @@ func TestGatewayAcceptsSessionCookieAndChecksOriginForWrites(t *testing.T) {
 		})
 	}
 }
+
+func TestLogoutProxiesWithAllowedOriginOrBearerToken(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/auth/logout" {
+			t.Errorf("unexpected logout request: %s %s", r.Method, r.URL.Path)
+		}
+		http.SetCookie(w, &http.Cookie{Name: "finory_access", Path: "/api/v1", MaxAge: -1})
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	authURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := newTestGateway(config.Config{AuthServiceURL: authURL})
+	for _, tc := range []struct {
+		name, origin, bearer string
+		want                 int
+	}{
+		{name: "allowed frontend with expired cookie", origin: "http://localhost:3000", want: http.StatusNoContent},
+		{name: "valid bearer without origin", bearer: testAccessToken(t), want: http.StatusNoContent},
+		{name: "missing origin", want: http.StatusUnauthorized},
+		{name: "foreign origin", origin: "https://other.example.com", want: http.StatusUnauthorized},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+			request.AddCookie(&http.Cookie{Name: "finory_access", Value: "expired-token"})
+			if tc.origin != "" {
+				request.Header.Set("Origin", tc.origin)
+			}
+			if tc.bearer != "" {
+				request.Header.Set("Authorization", "Bearer "+tc.bearer)
+			}
+			response := httptest.NewRecorder()
+			gateway.ServeHTTP(response, request)
+			if response.Code != tc.want {
+				t.Fatalf("logout status = %d, want %d", response.Code, tc.want)
+			}
+			if tc.want == http.StatusNoContent && !strings.Contains(response.Header().Get("Set-Cookie"), "Max-Age=0") {
+				t.Fatalf("logout cookie was not forwarded: %v", response.Header())
+			}
+		})
+	}
+}
