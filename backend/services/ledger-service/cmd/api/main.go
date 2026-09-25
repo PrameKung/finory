@@ -7,24 +7,21 @@ import (
 	"os"
 	"time"
 
+	"finory/backend/services/ledger-service/internal/config"
 	"finory/backend/services/ledger-service/internal/server"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8082"
-	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		logger.Error("DATABASE_URL is required")
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Error("invalid service configuration", "error", err)
 		os.Exit(1)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("invalid database configuration", "error", err)
 		os.Exit(1)
@@ -41,11 +38,11 @@ func main() {
 	}
 	logger.Info("database connected", "database", databaseName)
 	httpServer := &http.Server{
-		Addr:              ":" + port,
+		Addr:              ":" + cfg.Port,
 		Handler:           server.New(pool.Ping),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	logger.Info("service listening", "service", "ledger-service", "port", port)
+	logger.Info("service listening", "service", "ledger-service", "port", cfg.Port)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("service stopped", "error", err)
 		os.Exit(1)

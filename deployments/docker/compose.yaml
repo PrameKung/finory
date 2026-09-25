@@ -39,7 +39,7 @@ services:
         SERVICE: analytics-service
     environment:
       PORT: "8083"
-      LEDGER_SERVICE_URL: http://ledger-service:8082
+      LEDGER_SERVICE_URL: ${LEDGER_SERVICE_URL:-http://ledger-service:8082}
     depends_on:
       ledger-service:
         condition: service_healthy
@@ -57,9 +57,9 @@ services:
         SERVICE: api-gateway
     environment:
       PORT: "8080"
-      AUTH_SERVICE_URL: http://auth-service:8081
-      LEDGER_SERVICE_URL: http://ledger-service:8082
-      ANALYTICS_SERVICE_URL: http://analytics-service:8083
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
+      LEDGER_SERVICE_URL: ${LEDGER_SERVICE_URL:-http://ledger-service:8082}
+      ANALYTICS_SERVICE_URL: ${ANALYTICS_SERVICE_URL:-http://analytics-service:8083}
     ports:
       - "127.0.0.1:${API_GATEWAY_PORT:-8080}:8080"
     depends_on:
