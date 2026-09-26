@@ -8,6 +8,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Budget struct {
+	ID         pgtype.UUID
+	UserID     pgtype.UUID
+	CategoryID pgtype.UUID
+	Amount     pgtype.Numeric
+	MonthStart pgtype.Date
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type Category struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"finory/backend/services/ledger-service/internal/budgets"
 	"finory/backend/services/ledger-service/internal/categories"
 	"finory/backend/services/ledger-service/internal/transactions"
 	"finory/backend/services/ledger-service/internal/wallets"
@@ -18,6 +19,7 @@ func New(
 	categoryHandler *categories.Handler,
 	walletHandler *wallets.Handler,
 	transactionHandler *transactions.Handler,
+	budgetHandler *budgets.Handler,
 ) http.Handler {
 	e := echo.New()
 	e.GET("/health", func(c *echo.Context) error {
@@ -39,6 +41,9 @@ func New(
 	}
 	if transactionHandler != nil {
 		transactionHandler.Register(e)
+	}
+	if budgetHandler != nil {
+		budgetHandler.Register(e)
 	}
 	return e
 }

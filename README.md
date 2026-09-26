@@ -18,7 +18,7 @@ Create separate `auth_db` and `ledger_db` databases in Neon, then copy `.env.exa
 
 Run `make compose-up` to build and start API Gateway, Auth Service, Ledger Service, and Analytics Service under the `finory` Compose project name. Auth and Ledger confirm they connected to `auth_db` and `ledger_db` respectively before listening. Their `GET /ready` endpoints check their database connections on demand. Compose uses `/health` for routine checks so it does not repeatedly query Neon. The gateway is available at `http://localhost:8080/health`. Set `API_GATEWAY_PORT` in `.env.local` if port 8080 is occupied. Run `make compose-logs` to follow logs and `make compose-down` to stop the stack. To inspect readiness from inside the containers, run `docker compose --env-file .env.local -f deployments/docker/compose.yaml exec auth-service wget -qO- http://localhost:8081/ready` and the equivalent command with `ledger-service` and port `8082`.
 
-Auth and Ledger connect to Neon. The Ledger schema and CRUD routes cover user-owned categories and wallets. The Analytics Service does not use a database. The gateway forwards `/api/v1/auth/*` to the Auth Service as `/auth/*`, except `GET /api/v1/auth/health`, which forwards to `/health`. It forwards Ledger and Analytics paths to their respective services after removing `/api/v1`.
+Auth and Ledger connect to Neon. The Ledger schema and CRUD routes cover user-owned categories, wallets, transactions, and budgets. The Analytics Service does not use a database. The gateway forwards `/api/v1/auth/*` to the Auth Service as `/auth/*`, except `GET /api/v1/auth/health`, which forwards to `/health`. It forwards Ledger and Analytics paths to their respective services after removing `/api/v1`.
 
 The Auth Service's Goose migrations in `backend/services/auth-service/migrations/` create the `users` and `refresh_sessions` tables in `auth_db`. Users have a UUID ID and unique Google `sub`; email is not an account key because it can change. Refresh sessions store only a hash of each opaque token. There is no password column. Apply these migrations with Goose using the Auth Service database URL only:
 
@@ -28,7 +28,7 @@ GOOSE_DRIVER=postgres GOOSE_DBSTRING="$AUTH_DATABASE_URL" goose -dir backend/ser
 
 The Auth Service's user upsert is defined in `backend/services/auth-service/sql/queries/users.sql`. Regenerate its pgx code from the migration and query with `sqlc generate` in `backend/services/auth-service`.
 
-The Ledger Service's Goose migrations in `backend/services/ledger-service/migrations/` create the `categories` and `wallets` tables in `ledger_db`. Apply them with the Ledger database URL only:
+The Ledger Service's Goose migrations in `backend/services/ledger-service/migrations/` create the `categories`, `wallets`, `transactions`, and `budgets` tables in `ledger_db`. Apply them with the Ledger database URL only:
 
 ```sh
 GOOSE_DRIVER=postgres GOOSE_DBSTRING="$LEDGER_DATABASE_URL" goose -dir backend/services/ledger-service/migrations up
@@ -39,6 +39,8 @@ Authenticated category endpoints are `GET /api/v1/categories`, `POST /api/v1/cat
 Authenticated wallet endpoints follow the same methods at `/api/v1/wallets` and `/api/v1/wallets/:id`. Creating a wallet requires `name`, a `type` of `cash`, `bank`, `e_wallet`, or `other`, and a three-letter `currencyCode`; `balance` is an optional decimal string and defaults to `"0"`. Listing wallets initializes a zero-balance THB Cash wallet. The default Cash wallet is read only, while custom wallets can be updated and deleted. Wallet responses encode balances as strings to preserve decimal precision. Wallet queries also include the authenticated user ID for ownership enforcement.
 
 Authenticated transaction endpoints are `GET` and `POST /api/v1/transactions` plus `GET`, `PATCH`, and `DELETE /api/v1/transactions/:id`. Amounts are decimal strings, transaction dates use `YYYY-MM-DD`, and categories and wallets must belong to the authenticated user. List requests accept optional `month=YYYY-MM` and `type=income|expense` filters and return newest transaction dates first.
+
+Authenticated budget endpoints are `GET` and `POST /api/v1/budgets` plus `PATCH` and `DELETE /api/v1/budgets/:id`. Budgets use decimal-string amounts and a `month` in `YYYY-MM` format. Each budget belongs to one of the authenticated user's expense categories, and only one budget may exist for a category in a given month. List requests accept an optional `month=YYYY-MM` filter.
 
 Each Go service loads and validates its own environment variables at startup. `PORT` defaults to `8080` for the gateway, `8081` for Auth, `8082` for Ledger, and `8083` for Analytics. Auth and Ledger require `DATABASE_URL`; Compose supplies each from its matching root `.env.local` variable. For standalone runs, export `DATABASE_URL` in the service process environment.
 

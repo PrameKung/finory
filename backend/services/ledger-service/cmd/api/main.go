@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"finory/backend/services/ledger-service/internal/budgets"
 	"finory/backend/services/ledger-service/internal/categories"
 	"finory/backend/services/ledger-service/internal/config"
 	"finory/backend/services/ledger-service/internal/server"
@@ -49,9 +50,12 @@ func main() {
 	transactionRepository := transactions.NewRepository(pool)
 	transactionService := transactions.NewService(transactionRepository)
 	transactionHandler := transactions.NewHandler(transactionService)
+	budgetRepository := budgets.NewRepository(pool)
+	budgetService := budgets.NewService(budgetRepository)
+	budgetHandler := budgets.NewHandler(budgetService)
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.New(pool.Ping, categoryHandler, walletHandler, transactionHandler),
+		Handler:           server.New(pool.Ping, categoryHandler, walletHandler, transactionHandler, budgetHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("service listening", "service", "ledger-service", "port", cfg.Port)
