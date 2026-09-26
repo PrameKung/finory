@@ -20,6 +20,19 @@ type Category struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type Transaction struct {
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	CategoryID      pgtype.UUID
+	WalletID        pgtype.UUID
+	Type            string
+	Amount          pgtype.Numeric
+	Description     pgtype.Text
+	TransactionDate pgtype.Date
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
 type Wallet struct {
 	ID           pgtype.UUID
 	UserID       pgtype.UUID

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"finory/backend/services/ledger-service/internal/categories"
+	"finory/backend/services/ledger-service/internal/transactions"
 	"finory/backend/services/ledger-service/internal/wallets"
 
 	"github.com/labstack/echo/v5"
@@ -16,6 +17,7 @@ func New(
 	checkDatabase func(context.Context) error,
 	categoryHandler *categories.Handler,
 	walletHandler *wallets.Handler,
+	transactionHandler *transactions.Handler,
 ) http.Handler {
 	e := echo.New()
 	e.GET("/health", func(c *echo.Context) error {
@@ -34,6 +36,9 @@ func New(
 	}
 	if walletHandler != nil {
 		walletHandler.Register(e)
+	}
+	if transactionHandler != nil {
+		transactionHandler.Register(e)
 	}
 	return e
 }
