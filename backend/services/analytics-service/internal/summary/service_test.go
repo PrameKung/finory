@@ -153,3 +153,50 @@ func TestCategoryDistributionRejectsInvalidLedgerData(t *testing.T) {
 		})
 	}
 }
+
+func TestDailyIncomeExpenseTrends(t *testing.T) {
+	month := time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC)
+	ledgerClient := &fakeLedger{transactions: []ledger.Transaction{
+		{Type: "income", Amount: "100.0000", TransactionDate: "2024-02-01"},
+		{Type: "income", Amount: "0.2500", TransactionDate: "2024-02-01"},
+		{Type: "expense", Amount: "40.5000", TransactionDate: "2024-02-01"},
+		{Type: "expense", Amount: "10", TransactionDate: "2024-02-29"},
+	}}
+
+	result, err := NewService(ledgerClient).Trends(context.Background(), "user-1", "request-1", month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Month != "2024-02" || result.Granularity != "day" || len(result.Points) != 29 {
+		t.Fatalf("unexpected trend series: %+v", result)
+	}
+	if result.Points[0] != (TrendPoint{Date: "2024-02-01", Income: "100.2500", Expense: "40.5000"}) {
+		t.Fatalf("unexpected first point: %+v", result.Points[0])
+	}
+	if result.Points[1] != (TrendPoint{Date: "2024-02-02", Income: "0.0000", Expense: "0.0000"}) {
+		t.Fatalf("unexpected zero point: %+v", result.Points[1])
+	}
+	if result.Points[28] != (TrendPoint{Date: "2024-02-29", Income: "0.0000", Expense: "10.0000"}) {
+		t.Fatalf("unexpected last point: %+v", result.Points[28])
+	}
+	if ledgerClient.userID != "user-1" || ledgerClient.requestID != "request-1" || !ledgerClient.month.Equal(month) {
+		t.Fatalf("ledger scope was not forwarded: %+v", ledgerClient)
+	}
+}
+
+func TestDailyTrendsRejectInvalidLedgerData(t *testing.T) {
+	month := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	for name, transaction := range map[string]ledger.Transaction{
+		"invalid date":       {Type: "income", Amount: "1.00", TransactionDate: "not-a-date"},
+		"date outside month": {Type: "expense", Amount: "1.00", TransactionDate: "2026-08-31"},
+		"invalid type":       {Type: "transfer", Amount: "1.00", TransactionDate: "2026-09-01"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			service := NewService(&fakeLedger{transactions: []ledger.Transaction{transaction}})
+			_, err := service.Trends(context.Background(), "user-1", "", month)
+			if !errors.Is(err, ErrInvalidLedgerData) {
+				t.Fatalf("expected invalid ledger data, got %v", err)
+			}
+		})
+	}
+}

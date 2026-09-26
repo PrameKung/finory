@@ -2,6 +2,7 @@ package summary
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ const testUserID = "11111111-1111-4111-8111-111111111111"
 type fakeSummaryService struct {
 	result         MonthlySummary
 	categoryResult CategoryDistribution
+	trendResult    TrendSeries
 	err            error
 	userID         string
 	requestID      string
@@ -27,6 +29,13 @@ func (f *fakeSummaryService) Categories(_ context.Context, userID, requestID str
 	f.requestID = requestID
 	f.month = month
 	return f.categoryResult, f.err
+}
+
+func (f *fakeSummaryService) Trends(_ context.Context, userID, requestID string, month time.Time) (TrendSeries, error) {
+	f.userID = userID
+	f.requestID = requestID
+	f.month = month
+	return f.trendResult, f.err
 }
 
 func (f *fakeSummaryService) Monthly(_ context.Context, userID, requestID string, month time.Time) (MonthlySummary, error) {
@@ -110,6 +119,35 @@ func TestCategoryDistributionHandler(t *testing.T) {
 	want := "{\"month\":\"2026-09\",\"totalExpense\":\"40.0000\",\"categories\":[{\"rank\":1,\"categoryId\":\"food\",\"name\":\"Food\",\"icon\":null,\"color\":null,\"amount\":\"40.0000\",\"percentage\":\"100.00\"}]}\n"
 	if response.Code != http.StatusOK || response.Body.String() != want {
 		t.Fatalf("unexpected response: status=%d body=%q", response.Code, response.Body.String())
+	}
+	if service.userID != testUserID || service.requestID != "request-123" || service.month.Format("2006-01") != "2026-09" {
+		t.Fatalf("request scope was not forwarded: %+v", service)
+	}
+}
+
+func TestIncomeExpenseTrendsHandler(t *testing.T) {
+	service := &fakeSummaryService{trendResult: TrendSeries{
+		Month: "2026-09", Granularity: "day",
+		Points: []TrendPoint{{Date: "2026-09-01", Income: "10.0000", Expense: "5.0000"}},
+	}}
+	e := echo.New()
+	NewHandler(service).Register(e)
+	request := httptest.NewRequest(http.MethodGet, "/analytics/trends?month=2026-09", nil)
+	request.Header.Set(userIDHeader, testUserID)
+	request.Header.Set(echo.HeaderXRequestID, "request-123")
+	response := httptest.NewRecorder()
+
+	e.ServeHTTP(response, request)
+
+	var result TrendSeries
+	if response.Code != http.StatusOK {
+		t.Fatalf("unexpected response: status=%d body=%q", response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Month != "2026-09" || result.Granularity != "day" || len(result.Points) != 1 || result.Points[0].Income != "10.0000" {
+		t.Fatalf("unexpected trend response: %+v", result)
 	}
 	if service.userID != testUserID || service.requestID != "request-123" || service.month.Format("2006-01") != "2026-09" {
 		t.Fatalf("request scope was not forwarded: %+v", service)

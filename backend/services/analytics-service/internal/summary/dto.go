@@ -21,3 +21,15 @@ type CategoryRank struct {
 	Amount     string  `json:"amount"`
 	Percentage string  `json:"percentage"`
 }
+
+type TrendSeries struct {
+	Month       string       `json:"month"`
+	Granularity string       `json:"granularity"`
+	Points      []TrendPoint `json:"points"`
+}
+
+type TrendPoint struct {
+	Date    string `json:"date"`
+	Income  string `json:"income"`
+	Expense string `json:"expense"`
+}

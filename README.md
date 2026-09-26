@@ -44,6 +44,8 @@ The authenticated monthly summary endpoint is `GET /api/v1/analytics/summary`. I
 
 The authenticated expense-category distribution endpoint is `GET /api/v1/analytics/categories`. It accepts the same optional month filter and returns total expense plus categories ranked by descending amount. Each category includes its amount, percentage share, icon, and color; categories without expenses are omitted. Ties are ordered by category name and ID for deterministic results.
 
+The authenticated trend endpoint is `GET /api/v1/analytics/trends`. It accepts the same optional month filter and returns one income/expense point for every calendar day in that month. Days without transactions contain zero totals so frontend charts receive a continuous daily series.
+
 Authenticated budget endpoints are `GET` and `POST /api/v1/budgets` plus `PATCH` and `DELETE /api/v1/budgets/:id`. Budgets use decimal-string amounts and a `month` in `YYYY-MM` format. Each budget belongs to one of the authenticated user's expense categories, and only one budget may exist for a category in a given month. List requests accept an optional `month=YYYY-MM` filter.
 
 Each Go service loads and validates its own environment variables at startup. `PORT` defaults to `8080` for the gateway, `8081` for Auth, `8082` for Ledger, and `8083` for Analytics. Auth and Ledger require `DATABASE_URL`; Compose supplies each from its matching root `.env.local` variable. For standalone runs, export `DATABASE_URL` in the service process environment.

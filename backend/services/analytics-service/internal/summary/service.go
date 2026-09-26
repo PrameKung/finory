@@ -30,6 +30,55 @@ func NewService(ledgerClient ledgerReader) *Service {
 	return &Service{ledger: ledgerClient}
 }
 
+func (s *Service) Trends(ctx context.Context, userID, requestID string, month time.Time) (TrendSeries, error) {
+	transactions, err := s.ledger.ListTransactions(ctx, userID, requestID, month)
+	if err != nil {
+		return TrendSeries{}, err
+	}
+
+	type dailyTotal struct {
+		income  *big.Rat
+		expense *big.Rat
+	}
+	daysInMonth := time.Date(month.Year(), month.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day()
+	daily := make([]dailyTotal, daysInMonth+1)
+	for day := 1; day <= daysInMonth; day++ {
+		daily[day] = dailyTotal{income: new(big.Rat), expense: new(big.Rat)}
+	}
+
+	for _, transaction := range transactions {
+		date, err := time.Parse(time.DateOnly, transaction.TransactionDate)
+		if err != nil || date.Year() != month.Year() || date.Month() != month.Month() {
+			return TrendSeries{}, ErrInvalidLedgerData
+		}
+		amount, ok := parseAmount(transaction.Amount)
+		if !ok {
+			return TrendSeries{}, ErrInvalidLedgerData
+		}
+		switch transaction.Type {
+		case "income":
+			daily[date.Day()].income.Add(daily[date.Day()].income, amount)
+		case "expense":
+			daily[date.Day()].expense.Add(daily[date.Day()].expense, amount)
+		default:
+			return TrendSeries{}, ErrInvalidLedgerData
+		}
+	}
+
+	result := TrendSeries{
+		Month: month.Format("2006-01"), Granularity: "day",
+		Points: make([]TrendPoint, 0, daysInMonth),
+	}
+	for day := 1; day <= daysInMonth; day++ {
+		date := time.Date(month.Year(), month.Month(), day, 0, 0, 0, 0, time.UTC)
+		result.Points = append(result.Points, TrendPoint{
+			Date: date.Format(time.DateOnly), Income: daily[day].income.FloatString(4),
+			Expense: daily[day].expense.FloatString(4),
+		})
+	}
+	return result, nil
+}
+
 func (s *Service) Categories(ctx context.Context, userID, requestID string, month time.Time) (CategoryDistribution, error) {
 	data, err := s.ledger.GetMonthlyData(ctx, userID, requestID, month)
 	if err != nil {
