@@ -15,13 +15,14 @@ import (
 const testUserID = "11111111-1111-4111-8111-111111111111"
 
 type fakeSummaryService struct {
-	result         MonthlySummary
-	categoryResult CategoryDistribution
-	trendResult    TrendSeries
-	err            error
-	userID         string
-	requestID      string
-	month          time.Time
+	result           MonthlySummary
+	categoryResult   CategoryDistribution
+	trendResult      TrendSeries
+	comparisonResult MonthlyComparison
+	err              error
+	userID           string
+	requestID        string
+	month            time.Time
 }
 
 func (f *fakeSummaryService) Categories(_ context.Context, userID, requestID string, month time.Time) (CategoryDistribution, error) {
@@ -36,6 +37,13 @@ func (f *fakeSummaryService) Trends(_ context.Context, userID, requestID string,
 	f.requestID = requestID
 	f.month = month
 	return f.trendResult, f.err
+}
+
+func (f *fakeSummaryService) MonthlyComparison(_ context.Context, userID, requestID string, month time.Time) (MonthlyComparison, error) {
+	f.userID = userID
+	f.requestID = requestID
+	f.month = month
+	return f.comparisonResult, f.err
 }
 
 func (f *fakeSummaryService) Monthly(_ context.Context, userID, requestID string, month time.Time) (MonthlySummary, error) {
@@ -148,6 +156,43 @@ func TestIncomeExpenseTrendsHandler(t *testing.T) {
 	}
 	if result.Month != "2026-09" || result.Granularity != "day" || len(result.Points) != 1 || result.Points[0].Income != "10.0000" {
 		t.Fatalf("unexpected trend response: %+v", result)
+	}
+	if service.userID != testUserID || service.requestID != "request-123" || service.month.Format("2006-01") != "2026-09" {
+		t.Fatalf("request scope was not forwarded: %+v", service)
+	}
+}
+
+func TestMonthOverMonthComparisonHandler(t *testing.T) {
+	percentage := "25.00"
+	service := &fakeSummaryService{comparisonResult: MonthlyComparison{
+		Month: "2026-09", PreviousMonth: "2026-08",
+		Current:  MonthlyTotals{Income: "125.0000", Expense: "0.0000"},
+		Previous: MonthlyTotals{Income: "100.0000", Expense: "0.0000"},
+		Changes: MonthlyChanges{
+			Income:  AmountChange{Amount: "25.0000", Percentage: &percentage},
+			Expense: AmountChange{Amount: "0.0000"},
+		},
+	}}
+	e := echo.New()
+	NewHandler(service).Register(e)
+	request := httptest.NewRequest(http.MethodGet, "/analytics/monthly?month=2026-09", nil)
+	request.Header.Set(userIDHeader, testUserID)
+	request.Header.Set(echo.HeaderXRequestID, "request-123")
+	response := httptest.NewRecorder()
+
+	e.ServeHTTP(response, request)
+
+	var result MonthlyComparison
+	if response.Code != http.StatusOK {
+		t.Fatalf("unexpected response: status=%d body=%q", response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Month != "2026-09" || result.PreviousMonth != "2026-08" ||
+		result.Changes.Income.Percentage == nil || *result.Changes.Income.Percentage != "25.00" ||
+		result.Changes.Expense.Percentage != nil {
+		t.Fatalf("unexpected comparison response: %+v", result)
 	}
 	if service.userID != testUserID || service.requestID != "request-123" || service.month.Format("2006-01") != "2026-09" {
 		t.Fatalf("request scope was not forwarded: %+v", service)

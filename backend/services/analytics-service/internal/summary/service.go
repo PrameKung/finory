@@ -30,6 +30,38 @@ func NewService(ledgerClient ledgerReader) *Service {
 	return &Service{ledger: ledgerClient}
 }
 
+func (s *Service) MonthlyComparison(ctx context.Context, userID, requestID string, month time.Time) (MonthlyComparison, error) {
+	previousMonth := time.Date(month.Year(), month.Month()-1, 1, 0, 0, 0, 0, time.UTC)
+
+	currentTransactions, err := s.ledger.ListTransactions(ctx, userID, requestID, month)
+	if err != nil {
+		return MonthlyComparison{}, err
+	}
+	previousTransactions, err := s.ledger.ListTransactions(ctx, userID, requestID, previousMonth)
+	if err != nil {
+		return MonthlyComparison{}, err
+	}
+
+	current, err := calculateTotals(currentTransactions)
+	if err != nil {
+		return MonthlyComparison{}, err
+	}
+	previous, err := calculateTotals(previousTransactions)
+	if err != nil {
+		return MonthlyComparison{}, err
+	}
+
+	return MonthlyComparison{
+		Month: month.Format("2006-01"), PreviousMonth: previousMonth.Format("2006-01"),
+		Current:  totalsResponse(current),
+		Previous: totalsResponse(previous),
+		Changes: MonthlyChanges{
+			Income:  amountChange(current.income, previous.income),
+			Expense: amountChange(current.expense, previous.expense),
+		},
+	}, nil
+}
+
 func (s *Service) Trends(ctx context.Context, userID, requestID string, month time.Time) (TrendSeries, error) {
 	transactions, err := s.ledger.ListTransactions(ctx, userID, requestID, month)
 	if err != nil {
@@ -164,29 +196,57 @@ func (s *Service) Monthly(ctx context.Context, userID, requestID string, month t
 	if err != nil {
 		return MonthlySummary{}, err
 	}
-
-	income := new(big.Rat)
-	expense := new(big.Rat)
-	for _, transaction := range transactions {
-		amount, ok := parseAmount(transaction.Amount)
-		if !ok {
-			return MonthlySummary{}, ErrInvalidLedgerData
-		}
-		switch transaction.Type {
-		case "income":
-			income.Add(income, amount)
-		case "expense":
-			expense.Add(expense, amount)
-		default:
-			return MonthlySummary{}, ErrInvalidLedgerData
-		}
+	totals, err := calculateTotals(transactions)
+	if err != nil {
+		return MonthlySummary{}, err
 	}
 
 	return MonthlySummary{
 		Month:   month.Format("2006-01"),
-		Income:  income.FloatString(4),
-		Expense: expense.FloatString(4),
+		Income:  totals.income.FloatString(4),
+		Expense: totals.expense.FloatString(4),
 	}, nil
+}
+
+type transactionTotals struct {
+	income  *big.Rat
+	expense *big.Rat
+}
+
+func calculateTotals(transactions []ledger.Transaction) (transactionTotals, error) {
+	totals := transactionTotals{income: new(big.Rat), expense: new(big.Rat)}
+	for _, transaction := range transactions {
+		amount, ok := parseAmount(transaction.Amount)
+		if !ok {
+			return transactionTotals{}, ErrInvalidLedgerData
+		}
+		switch transaction.Type {
+		case "income":
+			totals.income.Add(totals.income, amount)
+		case "expense":
+			totals.expense.Add(totals.expense, amount)
+		default:
+			return transactionTotals{}, ErrInvalidLedgerData
+		}
+	}
+	return totals, nil
+}
+
+func totalsResponse(totals transactionTotals) MonthlyTotals {
+	return MonthlyTotals{Income: totals.income.FloatString(4), Expense: totals.expense.FloatString(4)}
+}
+
+func amountChange(current, previous *big.Rat) AmountChange {
+	change := new(big.Rat).Sub(current, previous)
+	result := AmountChange{Amount: change.FloatString(4)}
+	if previous.Sign() == 0 {
+		return result
+	}
+	percentage := new(big.Rat).Mul(change, big.NewRat(100, 1))
+	percentage.Quo(percentage, previous)
+	formatted := percentage.FloatString(2)
+	result.Percentage = &formatted
+	return result
 }
 
 func parseAmount(value string) (*big.Rat, bool) {

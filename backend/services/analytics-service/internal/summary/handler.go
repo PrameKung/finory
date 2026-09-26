@@ -16,6 +16,7 @@ type summaryService interface {
 	Monthly(context.Context, string, string, time.Time) (MonthlySummary, error)
 	Categories(context.Context, string, string, time.Time) (CategoryDistribution, error)
 	Trends(context.Context, string, string, time.Time) (TrendSeries, error)
+	MonthlyComparison(context.Context, string, string, time.Time) (MonthlyComparison, error)
 }
 
 type Handler struct {
@@ -30,6 +31,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	e.GET("/analytics/summary", h.monthly)
 	e.GET("/analytics/categories", h.categories)
 	e.GET("/analytics/trends", h.trends)
+	e.GET("/analytics/monthly", h.monthlyComparison)
 }
 
 func (h *Handler) monthly(c *echo.Context) error {
@@ -69,6 +71,21 @@ func (h *Handler) trends(c *echo.Context) error {
 	}
 
 	result, err := h.service.Trends(
+		c.Request().Context(), userID, c.Request().Header.Get(echo.HeaderXRequestID), month,
+	)
+	if err != nil {
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "ledger_service_unavailable"})
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
+func (h *Handler) monthlyComparison(c *echo.Context) error {
+	userID, month, errorCode := requestScope(c)
+	if errorCode != "" {
+		return requestError(c, errorCode)
+	}
+
+	result, err := h.service.MonthlyComparison(
 		c.Request().Context(), userID, c.Request().Header.Get(echo.HeaderXRequestID), month,
 	)
 	if err != nil {

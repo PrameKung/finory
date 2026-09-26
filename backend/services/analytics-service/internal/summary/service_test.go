@@ -10,18 +10,24 @@ import (
 )
 
 type fakeLedger struct {
-	transactions []ledger.Transaction
-	monthlyData  ledger.MonthlyData
-	err          error
-	userID       string
-	requestID    string
-	month        time.Time
+	transactions        []ledger.Transaction
+	transactionsByMonth map[string][]ledger.Transaction
+	monthlyData         ledger.MonthlyData
+	err                 error
+	userID              string
+	requestID           string
+	month               time.Time
+	requestedMonths     []string
 }
 
 func (f *fakeLedger) ListTransactions(_ context.Context, userID, requestID string, month time.Time) ([]ledger.Transaction, error) {
 	f.userID = userID
 	f.requestID = requestID
 	f.month = month
+	f.requestedMonths = append(f.requestedMonths, month.Format("2006-01"))
+	if f.transactionsByMonth != nil {
+		return f.transactionsByMonth[month.Format("2006-01")], f.err
+	}
 	return f.transactions, f.err
 }
 
@@ -198,5 +204,54 @@ func TestDailyTrendsRejectInvalidLedgerData(t *testing.T) {
 				t.Fatalf("expected invalid ledger data, got %v", err)
 			}
 		})
+	}
+}
+
+func TestMonthOverMonthComparison(t *testing.T) {
+	month := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	ledgerClient := &fakeLedger{transactionsByMonth: map[string][]ledger.Transaction{
+		"2026-01": {
+			{Type: "income", Amount: "150.0000"},
+			{Type: "expense", Amount: "50.0000"},
+		},
+		"2025-12": {
+			{Type: "income", Amount: "100.0000"},
+			{Type: "expense", Amount: "100.0000"},
+		},
+	}}
+
+	result, err := NewService(ledgerClient).MonthlyComparison(context.Background(), "user-1", "request-1", month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Month != "2026-01" || result.PreviousMonth != "2025-12" ||
+		result.Current != (MonthlyTotals{Income: "150.0000", Expense: "50.0000"}) ||
+		result.Previous != (MonthlyTotals{Income: "100.0000", Expense: "100.0000"}) {
+		t.Fatalf("unexpected comparison totals: %+v", result)
+	}
+	if result.Changes.Income.Amount != "50.0000" || result.Changes.Income.Percentage == nil || *result.Changes.Income.Percentage != "50.00" {
+		t.Fatalf("unexpected income change: %+v", result.Changes.Income)
+	}
+	if result.Changes.Expense.Amount != "-50.0000" || result.Changes.Expense.Percentage == nil || *result.Changes.Expense.Percentage != "-50.00" {
+		t.Fatalf("unexpected expense change: %+v", result.Changes.Expense)
+	}
+	if len(ledgerClient.requestedMonths) != 2 || ledgerClient.requestedMonths[0] != "2026-01" || ledgerClient.requestedMonths[1] != "2025-12" {
+		t.Fatalf("unexpected requested months: %v", ledgerClient.requestedMonths)
+	}
+}
+
+func TestMonthOverMonthPercentageIsNullWithoutPreviousValue(t *testing.T) {
+	month := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	service := NewService(&fakeLedger{transactionsByMonth: map[string][]ledger.Transaction{
+		"2026-09": {{Type: "income", Amount: "25.0000"}},
+	}})
+
+	result, err := service.MonthlyComparison(context.Background(), "user-1", "", month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Changes.Income.Amount != "25.0000" || result.Changes.Income.Percentage != nil ||
+		result.Changes.Expense.Amount != "0.0000" || result.Changes.Expense.Percentage != nil {
+		t.Fatalf("unexpected zero-baseline changes: %+v", result.Changes)
 	}
 }

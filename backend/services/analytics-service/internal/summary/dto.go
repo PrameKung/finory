@@ -33,3 +33,26 @@ type TrendPoint struct {
 	Income  string `json:"income"`
 	Expense string `json:"expense"`
 }
+
+type MonthlyComparison struct {
+	Month         string         `json:"month"`
+	PreviousMonth string         `json:"previousMonth"`
+	Current       MonthlyTotals  `json:"current"`
+	Previous      MonthlyTotals  `json:"previous"`
+	Changes       MonthlyChanges `json:"changes"`
+}
+
+type MonthlyTotals struct {
+	Income  string `json:"income"`
+	Expense string `json:"expense"`
+}
+
+type MonthlyChanges struct {
+	Income  AmountChange `json:"income"`
+	Expense AmountChange `json:"expense"`
+}
+
+type AmountChange struct {
+	Amount     string  `json:"amount"`
+	Percentage *string `json:"percentage"`
+}
