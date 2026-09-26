@@ -70,11 +70,12 @@ func NewClient(baseURL *url.URL, httpClient *http.Client) *Client {
 	return &Client{baseURL: cloneURL(baseURL), httpClient: httpClient}
 }
 
-// GetMonthlyData obtains user-scoped transactions and category metadata only
-// through Ledger Service's HTTP API.
-func (c *Client) GetMonthlyData(ctx context.Context, userID, requestID string, month time.Time) (MonthlyData, error) {
-	if c == nil || c.baseURL == nil || c.httpClient == nil || strings.TrimSpace(userID) == "" || month.IsZero() {
-		return MonthlyData{}, ErrInvalidRequest
+func (c *Client) ListTransactions(ctx context.Context, userID, requestID string, month time.Time) ([]Transaction, error) {
+	if err := c.validateRequest(userID); err != nil {
+		return nil, err
+	}
+	if month.IsZero() {
+		return nil, ErrInvalidRequest
 	}
 
 	transactionsURL := c.endpoint("/transactions")
@@ -84,15 +85,44 @@ func (c *Client) GetMonthlyData(ctx context.Context, userID, requestID string, m
 
 	var transactions []Transaction
 	if err := c.get(ctx, transactionsURL, userID, requestID, &transactions); err != nil {
-		return MonthlyData{}, fmt.Errorf("get monthly transactions: %w", err)
+		return nil, fmt.Errorf("get monthly transactions: %w", err)
+	}
+	return transactions, nil
+}
+
+func (c *Client) ListCategories(ctx context.Context, userID, requestID string) ([]Category, error) {
+	if err := c.validateRequest(userID); err != nil {
+		return nil, err
 	}
 
 	var categories []Category
 	if err := c.get(ctx, c.endpoint("/categories"), userID, requestID, &categories); err != nil {
-		return MonthlyData{}, fmt.Errorf("get categories: %w", err)
+		return nil, fmt.Errorf("get categories: %w", err)
+	}
+	return categories, nil
+}
+
+// GetMonthlyData obtains user-scoped transactions and category metadata only
+// through Ledger Service's HTTP API.
+func (c *Client) GetMonthlyData(ctx context.Context, userID, requestID string, month time.Time) (MonthlyData, error) {
+	transactions, err := c.ListTransactions(ctx, userID, requestID, month)
+	if err != nil {
+		return MonthlyData{}, err
+	}
+
+	categories, err := c.ListCategories(ctx, userID, requestID)
+	if err != nil {
+		return MonthlyData{}, err
 	}
 
 	return MonthlyData{Transactions: transactions, Categories: categories}, nil
+}
+
+func (c *Client) validateRequest(userID string) error {
+	if c == nil || c.baseURL == nil || c.httpClient == nil || strings.TrimSpace(userID) == "" {
+		return ErrInvalidRequest
+	}
+	return nil
 }
 
 func (c *Client) get(ctx context.Context, endpoint *url.URL, userID, requestID string, destination any) error {

@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"finory/backend/services/analytics-service/internal/config"
+	"finory/backend/services/analytics-service/internal/ledger"
 	"finory/backend/services/analytics-service/internal/server"
+	"finory/backend/services/analytics-service/internal/summary"
 )
 
 func main() {
@@ -17,9 +19,11 @@ func main() {
 		logger.Error("invalid service configuration", "error", err)
 		os.Exit(1)
 	}
+	ledgerClient := ledger.NewClient(cfg.LedgerServiceURL, &http.Client{Timeout: 10 * time.Second})
+	summaryHandler := summary.NewHandler(summary.NewService(ledgerClient))
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.New(),
+		Handler:           server.New(summaryHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("service listening", "service", "analytics-service", "port", cfg.Port)
