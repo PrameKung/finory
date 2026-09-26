@@ -24,3 +24,183 @@ func (q *Queries) CreateDefaultCashWallet(ctx context.Context, userID pgtype.UUI
 	}
 	return result.RowsAffected(), nil
 }
+
+const createWallet = `-- name: CreateWallet :one
+INSERT INTO wallets (user_id, name, type, balance, currency_code)
+VALUES (
+    $1::uuid,
+    $2,
+    $3,
+    $4::text::numeric,
+    $5
+)
+RETURNING id::text AS id, name, type, balance::text AS balance, currency_code,
+          is_default, created_at, updated_at
+`
+
+type CreateWalletParams struct {
+	UserID       pgtype.UUID
+	Name         string
+	Type         string
+	Balance      string
+	CurrencyCode string
+}
+
+type CreateWalletRow struct {
+	ID           string
+	Name         string
+	Type         string
+	Balance      string
+	CurrencyCode string
+	IsDefault    bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) CreateWallet(ctx context.Context, arg CreateWalletParams) (CreateWalletRow, error) {
+	row := q.db.QueryRow(ctx, createWallet,
+		arg.UserID,
+		arg.Name,
+		arg.Type,
+		arg.Balance,
+		arg.CurrencyCode,
+	)
+	var i CreateWalletRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Type,
+		&i.Balance,
+		&i.CurrencyCode,
+		&i.IsDefault,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteWallet = `-- name: DeleteWallet :execrows
+DELETE FROM wallets
+WHERE id = $1::uuid
+  AND user_id = $2::uuid
+  AND is_default = false
+`
+
+type DeleteWalletParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) DeleteWallet(ctx context.Context, arg DeleteWalletParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWallet, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const listWallets = `-- name: ListWallets :many
+SELECT id::text AS id, name, type, balance::text AS balance, currency_code,
+       is_default, created_at, updated_at
+FROM wallets
+WHERE user_id = $1::uuid
+ORDER BY is_default DESC, lower(name), id
+`
+
+type ListWalletsRow struct {
+	ID           string
+	Name         string
+	Type         string
+	Balance      string
+	CurrencyCode string
+	IsDefault    bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) ListWallets(ctx context.Context, userID pgtype.UUID) ([]ListWalletsRow, error) {
+	rows, err := q.db.Query(ctx, listWallets, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWalletsRow
+	for rows.Next() {
+		var i ListWalletsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.Balance,
+			&i.CurrencyCode,
+			&i.IsDefault,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateWallet = `-- name: UpdateWallet :one
+UPDATE wallets
+SET
+    name = COALESCE($1::text, name),
+    type = COALESCE($2::text, type),
+    balance = COALESCE($3::text::numeric, balance),
+    currency_code = COALESCE($4::text, currency_code),
+    updated_at = now()
+WHERE id = $5::uuid
+  AND user_id = $6::uuid
+  AND is_default = false
+RETURNING id::text AS id, name, type, balance::text AS balance, currency_code,
+          is_default, created_at, updated_at
+`
+
+type UpdateWalletParams struct {
+	Name         pgtype.Text
+	Type         pgtype.Text
+	Balance      pgtype.Text
+	CurrencyCode pgtype.Text
+	ID           pgtype.UUID
+	UserID       pgtype.UUID
+}
+
+type UpdateWalletRow struct {
+	ID           string
+	Name         string
+	Type         string
+	Balance      string
+	CurrencyCode string
+	IsDefault    bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateWallet(ctx context.Context, arg UpdateWalletParams) (UpdateWalletRow, error) {
+	row := q.db.QueryRow(ctx, updateWallet,
+		arg.Name,
+		arg.Type,
+		arg.Balance,
+		arg.CurrencyCode,
+		arg.ID,
+		arg.UserID,
+	)
+	var i UpdateWalletRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Type,
+		&i.Balance,
+		&i.CurrencyCode,
+		&i.IsDefault,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

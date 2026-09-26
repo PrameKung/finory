@@ -10,6 +10,7 @@ import (
 	"finory/backend/services/ledger-service/internal/categories"
 	"finory/backend/services/ledger-service/internal/config"
 	"finory/backend/services/ledger-service/internal/server"
+	"finory/backend/services/ledger-service/internal/wallets"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,9 +42,12 @@ func main() {
 	categoryRepository := categories.NewRepository(pool)
 	categoryService := categories.NewService(categoryRepository)
 	categoryHandler := categories.NewHandler(categoryService)
+	walletRepository := wallets.NewRepository(pool)
+	walletService := wallets.NewService(walletRepository)
+	walletHandler := wallets.NewHandler(walletService)
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.New(pool.Ping, categoryHandler),
+		Handler:           server.New(pool.Ping, categoryHandler, walletHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("service listening", "service", "ledger-service", "port", cfg.Port)
