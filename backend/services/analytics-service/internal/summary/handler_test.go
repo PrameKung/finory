@@ -14,11 +14,19 @@ import (
 const testUserID = "11111111-1111-4111-8111-111111111111"
 
 type fakeSummaryService struct {
-	result    MonthlySummary
-	err       error
-	userID    string
-	requestID string
-	month     time.Time
+	result         MonthlySummary
+	categoryResult CategoryDistribution
+	err            error
+	userID         string
+	requestID      string
+	month          time.Time
+}
+
+func (f *fakeSummaryService) Categories(_ context.Context, userID, requestID string, month time.Time) (CategoryDistribution, error) {
+	f.userID = userID
+	f.requestID = requestID
+	f.month = month
+	return f.categoryResult, f.err
 }
 
 func (f *fakeSummaryService) Monthly(_ context.Context, userID, requestID string, month time.Time) (MonthlySummary, error) {
@@ -82,5 +90,28 @@ func TestMonthlySummaryHandlerReportsLedgerFailure(t *testing.T) {
 
 	if response.Code != http.StatusBadGateway || response.Body.String() != "{\"error\":\"ledger_service_unavailable\"}\n" {
 		t.Fatalf("unexpected response: status=%d body=%q", response.Code, response.Body.String())
+	}
+}
+
+func TestCategoryDistributionHandler(t *testing.T) {
+	service := &fakeSummaryService{categoryResult: CategoryDistribution{
+		Month: "2026-09", TotalExpense: "40.0000",
+		Categories: []CategoryRank{{Rank: 1, CategoryID: "food", Name: "Food", Amount: "40.0000", Percentage: "100.00"}},
+	}}
+	e := echo.New()
+	NewHandler(service).Register(e)
+	request := httptest.NewRequest(http.MethodGet, "/analytics/categories?month=2026-09", nil)
+	request.Header.Set(userIDHeader, testUserID)
+	request.Header.Set(echo.HeaderXRequestID, "request-123")
+	response := httptest.NewRecorder()
+
+	e.ServeHTTP(response, request)
+
+	want := "{\"month\":\"2026-09\",\"totalExpense\":\"40.0000\",\"categories\":[{\"rank\":1,\"categoryId\":\"food\",\"name\":\"Food\",\"icon\":null,\"color\":null,\"amount\":\"40.0000\",\"percentage\":\"100.00\"}]}\n"
+	if response.Code != http.StatusOK || response.Body.String() != want {
+		t.Fatalf("unexpected response: status=%d body=%q", response.Code, response.Body.String())
+	}
+	if service.userID != testUserID || service.requestID != "request-123" || service.month.Format("2006-01") != "2026-09" {
+		t.Fatalf("request scope was not forwarded: %+v", service)
 	}
 }

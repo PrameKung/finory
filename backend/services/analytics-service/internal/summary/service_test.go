@@ -11,6 +11,7 @@ import (
 
 type fakeLedger struct {
 	transactions []ledger.Transaction
+	monthlyData  ledger.MonthlyData
 	err          error
 	userID       string
 	requestID    string
@@ -22,6 +23,13 @@ func (f *fakeLedger) ListTransactions(_ context.Context, userID, requestID strin
 	f.requestID = requestID
 	f.month = month
 	return f.transactions, f.err
+}
+
+func (f *fakeLedger) GetMonthlyData(_ context.Context, userID, requestID string, month time.Time) (ledger.MonthlyData, error) {
+	f.userID = userID
+	f.requestID = requestID
+	f.month = month
+	return f.monthlyData, f.err
 }
 
 func TestMonthlySummary(t *testing.T) {
@@ -67,5 +75,81 @@ func TestMonthlySummaryPropagatesLedgerError(t *testing.T) {
 	_, err := NewService(&fakeLedger{err: want}).Monthly(context.Background(), "user-1", "", time.Now())
 	if !errors.Is(err, want) {
 		t.Fatalf("expected ledger error, got %v", err)
+	}
+}
+
+func TestCategoryDistributionAndRanking(t *testing.T) {
+	month := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	foodIcon, foodColor := "utensils", "#ff0000"
+	ledgerClient := &fakeLedger{monthlyData: ledger.MonthlyData{
+		Categories: []ledger.Category{
+			{ID: "food", Name: "Food", Type: "expense", Icon: &foodIcon, Color: &foodColor},
+			{ID: "rent", Name: "Rent", Type: "expense"},
+			{ID: "salary", Name: "Salary", Type: "income"},
+			{ID: "unused", Name: "Unused", Type: "expense"},
+		},
+		Transactions: []ledger.Transaction{
+			{CategoryID: "food", Type: "expense", Amount: "20.0000"},
+			{CategoryID: "food", Type: "expense", Amount: "40"},
+			{CategoryID: "rent", Type: "expense", Amount: "30.0000"},
+			{CategoryID: "salary", Type: "income", Amount: "1000.0000"},
+		},
+	}}
+
+	result, err := NewService(ledgerClient).Categories(context.Background(), "user-1", "request-1", month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Month != "2026-09" || result.TotalExpense != "90.0000" || len(result.Categories) != 2 {
+		t.Fatalf("unexpected distribution: %+v", result)
+	}
+	if result.Categories[0] != (CategoryRank{
+		Rank: 1, CategoryID: "food", Name: "Food", Icon: &foodIcon, Color: &foodColor,
+		Amount: "60.0000", Percentage: "66.67",
+	}) {
+		t.Fatalf("unexpected first rank: %+v", result.Categories[0])
+	}
+	if result.Categories[1].Rank != 2 || result.Categories[1].CategoryID != "rent" ||
+		result.Categories[1].Amount != "30.0000" || result.Categories[1].Percentage != "33.33" {
+		t.Fatalf("unexpected second rank: %+v", result.Categories[1])
+	}
+	if ledgerClient.userID != "user-1" || ledgerClient.requestID != "request-1" || !ledgerClient.month.Equal(month) {
+		t.Fatalf("ledger scope was not forwarded: %+v", ledgerClient)
+	}
+}
+
+func TestCategoryDistributionReturnsEmptyListWithoutExpenses(t *testing.T) {
+	service := NewService(&fakeLedger{monthlyData: ledger.MonthlyData{
+		Categories:   []ledger.Category{{ID: "salary", Name: "Salary", Type: "income"}},
+		Transactions: []ledger.Transaction{{CategoryID: "salary", Type: "income", Amount: "100.00"}},
+	}})
+	result, err := service.Categories(context.Background(), "user-1", "", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TotalExpense != "0.0000" || result.Categories == nil || len(result.Categories) != 0 {
+		t.Fatalf("unexpected empty distribution: %+v", result)
+	}
+}
+
+func TestCategoryDistributionRejectsInvalidLedgerData(t *testing.T) {
+	for name, data := range map[string]ledger.MonthlyData{
+		"missing category": {
+			Transactions: []ledger.Transaction{{CategoryID: "missing", Type: "expense", Amount: "1.00"}},
+		},
+		"wrong category type": {
+			Categories:   []ledger.Category{{ID: "salary", Name: "Salary", Type: "income"}},
+			Transactions: []ledger.Transaction{{CategoryID: "salary", Type: "expense", Amount: "1.00"}},
+		},
+		"duplicate category": {
+			Categories: []ledger.Category{{ID: "food", Name: "Food", Type: "expense"}, {ID: "food", Name: "Food", Type: "expense"}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewService(&fakeLedger{monthlyData: data}).Categories(context.Background(), "user-1", "", time.Now())
+			if !errors.Is(err, ErrInvalidLedgerData) {
+				t.Fatalf("expected invalid ledger data, got %v", err)
+			}
+		})
 	}
 }

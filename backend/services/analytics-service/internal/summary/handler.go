@@ -14,6 +14,7 @@ const userIDHeader = "X-User-ID"
 
 type summaryService interface {
 	Monthly(context.Context, string, string, time.Time) (MonthlySummary, error)
+	Categories(context.Context, string, string, time.Time) (CategoryDistribution, error)
 }
 
 type Handler struct {
@@ -26,21 +27,13 @@ func NewHandler(service summaryService) *Handler {
 
 func (h *Handler) Register(e *echo.Echo) {
 	e.GET("/analytics/summary", h.monthly)
+	e.GET("/analytics/categories", h.categories)
 }
 
 func (h *Handler) monthly(c *echo.Context) error {
-	userID := c.Request().Header.Get(userIDHeader)
-	if !validUUID(userID) {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-	}
-
-	month := time.Now().UTC()
-	if value := strings.TrimSpace(c.QueryParam("month")); value != "" {
-		parsed, err := time.Parse("2006-01", value)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid_request"})
-		}
-		month = parsed
+	userID, month, errorCode := requestScope(c)
+	if errorCode != "" {
+		return requestError(c, errorCode)
 	}
 
 	result, err := h.service.Monthly(
@@ -50,6 +43,46 @@ func (h *Handler) monthly(c *echo.Context) error {
 		return c.JSON(http.StatusBadGateway, map[string]string{"error": "ledger_service_unavailable"})
 	}
 	return c.JSON(http.StatusOK, result)
+}
+
+func (h *Handler) categories(c *echo.Context) error {
+	userID, month, errorCode := requestScope(c)
+	if errorCode != "" {
+		return requestError(c, errorCode)
+	}
+
+	result, err := h.service.Categories(
+		c.Request().Context(), userID, c.Request().Header.Get(echo.HeaderXRequestID), month,
+	)
+	if err != nil {
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "ledger_service_unavailable"})
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
+func requestScope(c *echo.Context) (string, time.Time, string) {
+	userID := c.Request().Header.Get(userIDHeader)
+	if !validUUID(userID) {
+		return "", time.Time{}, "unauthorized"
+	}
+
+	month := time.Now().UTC()
+	if value := strings.TrimSpace(c.QueryParam("month")); value != "" {
+		parsed, err := time.Parse("2006-01", value)
+		if err != nil {
+			return "", time.Time{}, "invalid_request"
+		}
+		month = parsed
+	}
+	return userID, month, ""
+}
+
+func requestError(c *echo.Context, code string) error {
+	status := http.StatusBadRequest
+	if code == "unauthorized" {
+		status = http.StatusUnauthorized
+	}
+	return c.JSON(status, map[string]string{"error": code})
 }
 
 func validUUID(value string) bool {
