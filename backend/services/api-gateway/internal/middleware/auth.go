@@ -9,6 +9,8 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
+const AuthenticatedUserIDHeader = "X-User-ID"
+
 // RequireAccessToken verifies access tokens before a request reaches a service.
 func RequireAccessToken(secret []byte, allowedOrigins []string) echo.MiddlewareFunc {
 	if len(secret) < 32 {
@@ -64,6 +66,7 @@ func RequireAccessToken(secret []byte, allowedOrigins []string) echo.MiddlewareF
 			if err != nil || userID == uuid.Nil || userID.String() != claims.Subject {
 				return unauthorized()
 			}
+			c.Request().Header.Set(AuthenticatedUserIDHeader, userID.String())
 
 			return next(c)
 		}

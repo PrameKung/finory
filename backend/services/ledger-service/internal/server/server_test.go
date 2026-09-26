@@ -19,7 +19,7 @@ func TestReadinessChecksDatabase(t *testing.T) {
 		{name: "disconnected", checkError: errors.New("database unavailable"), wantStatus: http.StatusServiceUnavailable, wantBody: "{\"status\":\"unavailable\"}\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := New(func(context.Context) error { return tc.checkError })
+			handler := New(func(context.Context) error { return tc.checkError }, nil)
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ready", nil))
 			if response.Code != tc.wantStatus || response.Body.String() != tc.wantBody {

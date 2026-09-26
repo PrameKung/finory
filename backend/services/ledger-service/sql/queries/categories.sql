@@ -14,3 +14,39 @@ VALUES
     (sqlc.arg(user_id)::uuid, 'Entertainment', 'expense', 'gamepad-2', '#4F46E5', true),
     (sqlc.arg(user_id)::uuid, 'Other Expense', 'expense', 'circle-minus', '#64748B', true)
 ON CONFLICT (user_id, type, lower(name)) DO NOTHING;
+
+-- name: ListCategories :many
+SELECT id::text AS id, name, type, icon, color, is_default, created_at, updated_at
+FROM categories
+WHERE user_id = sqlc.arg(user_id)::uuid
+ORDER BY type, lower(name), id;
+
+-- name: CreateCategory :one
+INSERT INTO categories (user_id, name, type, icon, color)
+VALUES (
+    sqlc.arg(user_id)::uuid,
+    sqlc.arg(name),
+    sqlc.arg(type),
+    NULLIF(sqlc.arg(icon)::text, ''),
+    NULLIF(sqlc.arg(color)::text, '')
+)
+RETURNING id::text AS id, name, type, icon, color, is_default, created_at, updated_at;
+
+-- name: UpdateCategory :one
+UPDATE categories
+SET
+    name = COALESCE(sqlc.narg(name)::text, name),
+    type = COALESCE(sqlc.narg(type)::text, type),
+    icon = COALESCE(sqlc.narg(icon)::text, icon),
+    color = COALESCE(sqlc.narg(color)::text, color),
+    updated_at = now()
+WHERE id = sqlc.arg(id)::uuid
+  AND user_id = sqlc.arg(user_id)::uuid
+  AND is_default = false
+RETURNING id::text AS id, name, type, icon, color, is_default, created_at, updated_at;
+
+-- name: DeleteCategory :execrows
+DELETE FROM categories
+WHERE id = sqlc.arg(id)::uuid
+  AND user_id = sqlc.arg(user_id)::uuid
+  AND is_default = false;

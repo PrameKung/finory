@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"finory/backend/services/ledger-service/internal/categories"
 	"finory/backend/services/ledger-service/internal/config"
 	"finory/backend/services/ledger-service/internal/server"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -37,9 +38,12 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("database connected", "database", databaseName)
+	categoryRepository := categories.NewRepository(pool)
+	categoryService := categories.NewService(categoryRepository)
+	categoryHandler := categories.NewHandler(categoryService)
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.New(pool.Ping),
+		Handler:           server.New(pool.Ping, categoryHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logger.Info("service listening", "service", "ledger-service", "port", cfg.Port)

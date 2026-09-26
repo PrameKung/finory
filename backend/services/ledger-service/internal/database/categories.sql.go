@@ -11,6 +11,59 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createCategory = `-- name: CreateCategory :one
+INSERT INTO categories (user_id, name, type, icon, color)
+VALUES (
+    $1::uuid,
+    $2,
+    $3,
+    NULLIF($4::text, ''),
+    NULLIF($5::text, '')
+)
+RETURNING id::text AS id, name, type, icon, color, is_default, created_at, updated_at
+`
+
+type CreateCategoryParams struct {
+	UserID pgtype.UUID
+	Name   string
+	Type   string
+	Icon   string
+	Color  string
+}
+
+type CreateCategoryRow struct {
+	ID        string
+	Name      string
+	Type      string
+	Icon      pgtype.Text
+	Color     pgtype.Text
+	IsDefault bool
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (CreateCategoryRow, error) {
+	row := q.db.QueryRow(ctx, createCategory,
+		arg.UserID,
+		arg.Name,
+		arg.Type,
+		arg.Icon,
+		arg.Color,
+	)
+	var i CreateCategoryRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Type,
+		&i.Icon,
+		&i.Color,
+		&i.IsDefault,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createDefaultCategories = `-- name: CreateDefaultCategories :execrows
 INSERT INTO categories (user_id, name, type, icon, color, is_default)
 VALUES
@@ -35,4 +88,128 @@ func (q *Queries) CreateDefaultCategories(ctx context.Context, userID pgtype.UUI
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const deleteCategory = `-- name: DeleteCategory :execrows
+DELETE FROM categories
+WHERE id = $1::uuid
+  AND user_id = $2::uuid
+  AND is_default = false
+`
+
+type DeleteCategoryParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) DeleteCategory(ctx context.Context, arg DeleteCategoryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCategory, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const listCategories = `-- name: ListCategories :many
+SELECT id::text AS id, name, type, icon, color, is_default, created_at, updated_at
+FROM categories
+WHERE user_id = $1::uuid
+ORDER BY type, lower(name), id
+`
+
+type ListCategoriesRow struct {
+	ID        string
+	Name      string
+	Type      string
+	Icon      pgtype.Text
+	Color     pgtype.Text
+	IsDefault bool
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListCategories(ctx context.Context, userID pgtype.UUID) ([]ListCategoriesRow, error) {
+	rows, err := q.db.Query(ctx, listCategories, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCategoriesRow
+	for rows.Next() {
+		var i ListCategoriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.Icon,
+			&i.Color,
+			&i.IsDefault,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateCategory = `-- name: UpdateCategory :one
+UPDATE categories
+SET
+    name = COALESCE($1::text, name),
+    type = COALESCE($2::text, type),
+    icon = COALESCE($3::text, icon),
+    color = COALESCE($4::text, color),
+    updated_at = now()
+WHERE id = $5::uuid
+  AND user_id = $6::uuid
+  AND is_default = false
+RETURNING id::text AS id, name, type, icon, color, is_default, created_at, updated_at
+`
+
+type UpdateCategoryParams struct {
+	Name   pgtype.Text
+	Type   pgtype.Text
+	Icon   pgtype.Text
+	Color  pgtype.Text
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+type UpdateCategoryRow struct {
+	ID        string
+	Name      string
+	Type      string
+	Icon      pgtype.Text
+	Color     pgtype.Text
+	IsDefault bool
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (UpdateCategoryRow, error) {
+	row := q.db.QueryRow(ctx, updateCategory,
+		arg.Name,
+		arg.Type,
+		arg.Icon,
+		arg.Color,
+		arg.ID,
+		arg.UserID,
+	)
+	var i UpdateCategoryRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Type,
+		&i.Icon,
+		&i.Color,
+		&i.IsDefault,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
