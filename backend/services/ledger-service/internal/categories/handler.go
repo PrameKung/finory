@@ -1,6 +1,7 @@
 package categories
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,11 +14,18 @@ import (
 
 const userIDHeader = "X-User-ID"
 
-type Handler struct {
-	service *Service
+type categoryService interface {
+	Create(context.Context, string, CreateInput) (Category, error)
+	List(context.Context, string) ([]Category, error)
+	Update(context.Context, string, string, UpdateInput) (Category, error)
+	Delete(context.Context, string, string) error
 }
 
-func NewHandler(service *Service) *Handler {
+type Handler struct {
+	service categoryService
+}
+
+func NewHandler(service categoryService) *Handler {
 	return &Handler{service: service}
 }
 
