@@ -15,11 +15,19 @@ var (
 	ErrCategoryConflict = errors.New("category already exists")
 )
 
-type Service struct {
-	repository *Repository
+type categoryRepository interface {
+	CreateDefaults(context.Context, string) (int64, error)
+	List(context.Context, string) ([]Category, error)
+	Create(context.Context, string, CreateParams) (Category, error)
+	Update(context.Context, string, string, UpdateParams) (Category, error)
+	Delete(context.Context, string, string) (bool, error)
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository categoryRepository
+}
+
+func NewService(repository categoryRepository) *Service {
 	return &Service{repository: repository}
 }
 

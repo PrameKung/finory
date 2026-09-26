@@ -19,11 +19,19 @@ var (
 var balancePattern = regexp.MustCompile(`^-?(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$`)
 var currencyCodePattern = regexp.MustCompile(`^[A-Z]{3}$`)
 
-type Service struct {
-	repository *Repository
+type walletRepository interface {
+	CreateDefaultCash(context.Context, string) (int64, error)
+	List(context.Context, string) ([]Wallet, error)
+	Create(context.Context, string, CreateParams) (Wallet, error)
+	Update(context.Context, string, string, UpdateParams) (Wallet, error)
+	Delete(context.Context, string, string) (bool, error)
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository walletRepository
+}
+
+func NewService(repository walletRepository) *Service {
 	return &Service{repository: repository}
 }
 
