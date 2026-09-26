@@ -5,4 +5,5 @@ use (
 	./backend/services/auth-service
 	./backend/services/ledger-service
 	./backend/services/analytics-service
+	./backend/integration
 )
