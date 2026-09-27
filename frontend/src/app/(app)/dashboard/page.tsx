@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { MonthlyExpenseCard } from "@/features/dashboard/components/monthly-expense-card";
 import { MonthlyIncomeCard } from "@/features/dashboard/components/monthly-income-card";
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default function DashboardPage() {
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         <MonthlyIncomeCard />
+        <MonthlyExpenseCard />
       </section>
     </div>
   );
