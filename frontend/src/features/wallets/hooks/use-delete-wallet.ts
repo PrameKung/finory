@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   deleteWallet,
@@ -14,6 +15,7 @@ export function useDeleteWallet() {
     mutationFn: deleteWallet,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: walletQueryKeys.all });
+      toast.success("Wallet deleted");
     },
   });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   categoryQueryKeys,
@@ -14,6 +15,7 @@ export function useDeleteCategory() {
     mutationFn: deleteCategory,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: categoryQueryKeys.all });
+      toast.success("Category deleted");
     },
   });
 }

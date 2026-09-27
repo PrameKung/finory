@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   categoryQueryKeys,
@@ -12,8 +13,9 @@ export function useCreateCategory() {
 
   return useMutation({
     mutationFn: createCategory,
-    onSuccess: async () => {
+    onSuccess: async (category) => {
       await queryClient.invalidateQueries({ queryKey: categoryQueryKeys.all });
+      toast.success(`${category.name} created`);
     },
   });
 }

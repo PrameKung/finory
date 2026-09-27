@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   updateWallet,
@@ -19,8 +20,9 @@ export function useUpdateWallet() {
   return useMutation({
     mutationFn: ({ id, input }: UpdateWalletVariables) =>
       updateWallet(id, input),
-    onSuccess: async () => {
+    onSuccess: async (wallet) => {
       await queryClient.invalidateQueries({ queryKey: walletQueryKeys.all });
+      toast.success(`${wallet.name} updated`);
     },
   });
 }

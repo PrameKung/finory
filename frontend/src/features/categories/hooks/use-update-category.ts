@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   categoryQueryKeys,
@@ -19,8 +20,9 @@ export function useUpdateCategory() {
   return useMutation({
     mutationFn: ({ id, input }: UpdateCategoryVariables) =>
       updateCategory(id, input),
-    onSuccess: async () => {
+    onSuccess: async (category) => {
       await queryClient.invalidateQueries({ queryKey: categoryQueryKeys.all });
+      toast.success(`${category.name} updated`);
     },
   });
 }
