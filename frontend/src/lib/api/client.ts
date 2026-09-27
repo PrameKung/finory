@@ -1,9 +1,12 @@
-import { env } from "@/lib/env";
-import { ApiError, parseApiErrorBody } from "@/lib/api/errors";
+import { env } from "../env.ts";
+import { ApiError, parseApiErrorBody } from "./errors.ts";
 
-export { ApiError, getApiErrorMessage } from "@/lib/api/errors";
+export { ApiError, getApiErrorMessage } from "./errors.ts";
 
 const apiBaseUrl = env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
+const refreshPath = "/api/v1/auth/refresh";
+
+let refreshPromise: Promise<void> | undefined;
 
 async function readApiError(response: Response) {
   try {
@@ -19,7 +22,7 @@ export function getApiUrl(path: string) {
   return `${apiBaseUrl}${normalizedPath}`;
 }
 
-export async function apiRequest<T>(
+async function performApiRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
@@ -56,5 +59,44 @@ export async function apiRequest<T>(
     return (await response.json()) as T;
   } catch (error) {
     throw new ApiError(response.status, "invalid_response", { cause: error });
+  }
+}
+
+function refreshAccessToken() {
+  refreshPromise ??= performApiRequest<void>(refreshPath, {
+    method: "POST",
+  }).finally(() => {
+    refreshPromise = undefined;
+  });
+
+  return refreshPromise;
+}
+
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  try {
+    return await performApiRequest<T>(path, init);
+  } catch (error) {
+    if (
+      path === refreshPath ||
+      !(error instanceof ApiError) ||
+      error.status !== 401
+    ) {
+      throw error;
+    }
+
+    try {
+      await refreshAccessToken();
+    } catch (refreshError) {
+      if (refreshError instanceof ApiError && refreshError.status === 401) {
+        throw error;
+      }
+
+      throw refreshError;
+    }
+
+    return performApiRequest<T>(path, init);
   }
 }
