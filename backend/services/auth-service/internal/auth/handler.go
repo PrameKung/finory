@@ -29,14 +29,15 @@ type Handler struct {
 	verifier       TokenVerifier
 	service        *Service
 	appRedirectURL string
+	appLoginURL    string
 	secureCookies  bool
 }
 
-func NewHandler(oauth oauth2.Config, verifier TokenVerifier, service *Service, appRedirectURL string) *Handler {
+func NewHandler(oauth oauth2.Config, verifier TokenVerifier, service *Service, appRedirectURL, appLoginURL string) *Handler {
 	return &Handler{
 		oauth: oauth, verifier: verifier, service: service,
-		appRedirectURL: appRedirectURL,
-		secureCookies:  strings.HasPrefix(oauth.RedirectURL, "https://"),
+		appRedirectURL: appRedirectURL, appLoginURL: appLoginURL,
+		secureCookies: strings.HasPrefix(oauth.RedirectURL, "https://"),
 	}
 }
 
@@ -141,39 +142,47 @@ func (h *Handler) callback(c *echo.Context) error {
 	for _, cookie := range c.Request().Cookies() {
 		if cookie.Name == flowCookieName {
 			if flowCookie != nil {
-				return invalidCallback(c)
+				return h.oauthError(c, "oauth_failed")
 			}
 			flowCookie = cookie
 		}
 	}
 	if flowCookie == nil {
-		return invalidCallback(c)
+		return h.oauthError(c, "oauth_failed")
 	}
 	parts := strings.Split(flowCookie.Value, ".")
 	query, err := url.ParseQuery(c.Request().URL.RawQuery)
 	if err != nil {
-		return invalidCallback(c)
+		return h.oauthError(c, "oauth_failed")
 	}
-	states, codes := query["state"], query["code"]
-	_, hasProviderError := query["error"]
-	if len(parts) != 3 || len(states) != 1 || len(codes) != 1 || states[0] == "" || codes[0] == "" ||
+	states, codes, providerErrors := query["state"], query["code"], query["error"]
+	if len(parts) != 3 || len(states) != 1 || states[0] == "" ||
 		!validRandomValue(parts[0]) || !validRandomValue(parts[1]) || !validRandomValue(parts[2]) ||
-		subtle.ConstantTimeCompare([]byte(states[0]), []byte(parts[0])) != 1 || hasProviderError {
-		return invalidCallback(c)
+		subtle.ConstantTimeCompare([]byte(states[0]), []byte(parts[0])) != 1 {
+		return h.oauthError(c, "oauth_failed")
+	}
+	if len(providerErrors) != 0 {
+		if len(providerErrors) == 1 && providerErrors[0] == "access_denied" && len(codes) == 0 {
+			return h.oauthError(c, "oauth_cancelled")
+		}
+		return h.oauthError(c, "oauth_failed")
+	}
+	if len(codes) != 1 || codes[0] == "" {
+		return h.oauthError(c, "oauth_failed")
 	}
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
 	token, err := h.oauth.Exchange(ctx, codes[0], oauth2.VerifierOption(parts[2]))
 	if err != nil {
-		return invalidCallback(c)
+		return h.oauthError(c, "oauth_failed")
 	}
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok || rawIDToken == "" {
-		return invalidCallback(c)
+		return h.oauthError(c, "oauth_failed")
 	}
 	idToken, err := h.verifier.Verify(ctx, rawIDToken)
 	if err != nil || idToken == nil || subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(parts[1])) != 1 {
-		return invalidCallback(c)
+		return h.oauthError(c, "oauth_failed")
 	}
 	var claims struct {
 		Email         string `json:"email"`
@@ -182,17 +191,17 @@ func (h *Handler) callback(c *echo.Context) error {
 		Picture       string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
-		return invalidCallback(c)
+		return h.oauthError(c, "oauth_failed")
 	}
 	tokens, err := h.service.SignIn(ctx, GoogleUser{
 		Subject: idToken.Subject, Email: claims.Email,
 		DisplayName: claims.Name, AvatarURL: claims.Picture,
 	}, claims.EmailVerified)
 	if errors.Is(err, ErrInvalidIdentity) {
-		return invalidCallback(c)
+		return h.oauthError(c, "oauth_failed")
 	}
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "sign_in_failed"})
+		return h.oauthError(c, "oauth_failed")
 	}
 	h.setSessionCookies(c, tokens)
 	return c.Redirect(http.StatusSeeOther, h.appRedirectURL)
@@ -235,6 +244,13 @@ func validRandomValue(value string) bool {
 	return err == nil && len(decoded) == 32 && base64.RawURLEncoding.EncodeToString(decoded) == value
 }
 
-func invalidCallback(c *echo.Context) error {
-	return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid_oauth_callback"})
+func (h *Handler) oauthError(c *echo.Context, code string) error {
+	destination, err := url.Parse(h.appLoginURL)
+	if err != nil || destination.Host == "" {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "oauth_error_redirect_failed"})
+	}
+	query := destination.Query()
+	query.Set("error", code)
+	destination.RawQuery = query.Encode()
+	return c.Redirect(http.StatusSeeOther, destination.String())
 }

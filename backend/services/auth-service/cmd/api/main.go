@@ -54,7 +54,7 @@ func main() {
 	}
 	keySet := oidc.NewRemoteKeySet(context.Background(), "https://www.googleapis.com/oauth2/v3/certs")
 	verifier := oidc.NewVerifier("https://accounts.google.com", keySet, &oidc.Config{ClientID: cfg.GoogleClientID})
-	authHandler := auth.NewHandler(oauthConfig, verifier, authService, cfg.AppRedirectURL)
+	authHandler := auth.NewHandler(oauthConfig, verifier, authService, cfg.AppRedirectURL, cfg.AppLoginURL)
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           server.New(pool.Ping, authHandler),

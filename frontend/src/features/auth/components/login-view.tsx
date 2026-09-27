@@ -2,13 +2,18 @@ import Link from "next/link";
 
 import { AuthPanel } from "@/features/auth/components/auth-panel";
 
-export function LoginView() {
+type LoginViewProps = {
+  errorMessage?: string;
+};
+
+export function LoginView({ errorMessage }: LoginViewProps) {
   return (
     <AuthPanel
       title="Welcome back"
       description="Sign in with Google to continue to your Finory dashboard."
       actionLabel="Continue with Google"
       appearance="plain"
+      errorMessage={errorMessage}
       footer={
         <>
           New to Finory?{" "}

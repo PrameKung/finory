@@ -14,7 +14,8 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Port != "8081" || cfg.DatabaseURL != "postgresql://example/auth_db" || cfg.AppRedirectURL != "http://localhost:3000/dashboard" {
+	if cfg.Port != "8081" || cfg.DatabaseURL != "postgresql://example/auth_db" ||
+		cfg.AppRedirectURL != "http://localhost:3000/dashboard" || cfg.AppLoginURL != "http://localhost:3000/login" {
 		t.Fatalf("unexpected auth configuration: %+v", cfg)
 	}
 

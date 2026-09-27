@@ -1,4 +1,4 @@
-import { WalletCardsIcon } from "lucide-react";
+import { CircleAlertIcon, WalletCardsIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -11,6 +11,7 @@ type AuthPanelProps = {
   actionLabel: string;
   footer: ReactNode;
   appearance?: "card" | "plain";
+  errorMessage?: string;
 };
 
 export function AuthPanel({
@@ -19,6 +20,7 @@ export function AuthPanel({
   actionLabel,
   footer,
   appearance = "card",
+  errorMessage,
 }: AuthPanelProps) {
   return (
     <main className="w-full max-w-md">
@@ -50,6 +52,16 @@ export function AuthPanel({
             {description}
           </p>
         </div>
+
+        {errorMessage ? (
+          <div
+            role="alert"
+            className="mb-5 flex gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm leading-5 text-destructive"
+          >
+            <CircleAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <p>{errorMessage}</p>
+          </div>
+        ) : null}
 
         <GoogleAuthButton>{actionLabel}</GoogleAuthButton>
 

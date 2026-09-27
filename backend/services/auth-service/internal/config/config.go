@@ -15,6 +15,7 @@ type Config struct {
 	GoogleSecret      string
 	GoogleRedirectURL string
 	AppRedirectURL    string
+	AppLoginURL       string
 	JWTAccessSecret   []byte
 }
 
@@ -44,6 +45,9 @@ func Load() (Config, error) {
 	if err := validateURL(appRedirectURL, ""); err != nil {
 		return Config{}, fmt.Errorf("APP_REDIRECT_URL: %w", err)
 	}
+	appURL, _ := url.Parse(appRedirectURL)
+	appURL.Path = "/login"
+	appURL.RawPath = ""
 	secret := os.Getenv("JWT_ACCESS_SECRET")
 	if len(secret) < 32 {
 		return Config{}, fmt.Errorf("JWT_ACCESS_SECRET must be at least 32 bytes")
@@ -51,7 +55,8 @@ func Load() (Config, error) {
 	return Config{
 		Port: port, DatabaseURL: databaseURL, GoogleClientID: clientID,
 		GoogleSecret: clientSecret, GoogleRedirectURL: redirectURL,
-		AppRedirectURL: appRedirectURL, JWTAccessSecret: []byte(secret),
+		AppRedirectURL: appRedirectURL, AppLoginURL: appURL.String(),
+		JWTAccessSecret: []byte(secret),
 	}, nil
 }
 

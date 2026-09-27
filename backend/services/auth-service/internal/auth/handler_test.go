@@ -135,7 +135,10 @@ func newOAuthFixture(t *testing.T) *oauthFixture {
 		Endpoint:    oauth2.Endpoint{AuthURL: f.provider.URL + "/authorize", TokenURL: f.provider.URL + "/token"},
 	}
 	e := echo.New()
-	NewHandler(oauth, verifier, NewService(f.users, []byte(testSecret)), "http://localhost:3000/dashboard").Register(e)
+	NewHandler(
+		oauth, verifier, NewService(f.users, []byte(testSecret)),
+		"http://localhost:3000/dashboard", "http://localhost:3000/login",
+	).Register(e)
 	f.handler = e
 	return f
 }
@@ -249,6 +252,7 @@ func TestGoogleOAuthRejectsInvalidCallbacks(t *testing.T) {
 		badCode      bool
 		claims       func(jwt.MapClaims)
 		badIDToken   bool
+		wantError    string
 	}{
 		{name: "missing cookie", query: func(s string) string { return "code=good-code&state=" + s }},
 		{name: "wrong state", query: func(string) string { return "code=good-code&state=wrong" }, cookie: true},
@@ -260,7 +264,8 @@ func TestGoogleOAuthRejectsInvalidCallbacks(t *testing.T) {
 		{name: "empty code", query: func(s string) string { return "code=&state=" + s }, cookie: true},
 		{name: "malformed flow cookie", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, cookieValue: "invalid"},
 		{name: "duplicate flow cookie", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, secondCookie: true},
-		{name: "provider error", query: func(s string) string { return "state=" + s + "&code=good-code&error=access_denied" }, cookie: true},
+		{name: "cancelled by user", query: func(s string) string { return "state=" + s + "&error=access_denied" }, cookie: true, wantError: "oauth_cancelled"},
+		{name: "provider error with code", query: func(s string) string { return "state=" + s + "&code=good-code&error=access_denied" }, cookie: true},
 		{name: "wrong nonce", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, wrongNonce: true},
 		{name: "failed exchange", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, badCode: true},
 		{name: "invalid ID token", query: func(s string) string { return "code=good-code&state=" + s }, cookie: true, badIDToken: true},
@@ -308,7 +313,11 @@ func TestGoogleOAuthRejectsInvalidCallbacks(t *testing.T) {
 			} else {
 				response = f.callback(cookie, test.query(state))
 			}
-			if response.Code != http.StatusBadRequest || f.users.upserts != 0 {
+			if test.wantError == "" {
+				test.wantError = "oauth_failed"
+			}
+			wantLocation := "http://localhost:3000/login?error=" + test.wantError
+			if response.Code != http.StatusSeeOther || response.Header().Get("Location") != wantLocation || f.users.upserts != 0 {
 				t.Fatalf("invalid callback accepted: status=%d, users=%d", response.Code, f.users.upserts)
 			}
 			if f.requests != 0 && !test.badCode && !test.wrongNonce && test.claims == nil && !test.badIDToken {
@@ -407,7 +416,7 @@ func TestLogoutClearsSessionAndPendingOAuthCookies(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			e := echo.New()
-			NewHandler(oauth2.Config{RedirectURL: test.redirectURL}, nil, nil, "").Register(e)
+			NewHandler(oauth2.Config{RedirectURL: test.redirectURL}, nil, nil, "", "").Register(e)
 			response := httptest.NewRecorder()
 			e.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 			if response.Code != http.StatusNoContent {
