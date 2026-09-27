@@ -54,7 +54,9 @@ func (f *fakeSummaryService) Monthly(_ context.Context, userID, requestID string
 }
 
 func TestMonthlySummaryHandler(t *testing.T) {
-	service := &fakeSummaryService{result: MonthlySummary{Month: "2026-09", Income: "100.0000", Expense: "40.0000"}}
+	service := &fakeSummaryService{result: MonthlySummary{
+		Month: "2026-09", Income: "100.0000", Expense: "40.0000", NetBalance: "60.0000",
+	}}
 	e := echo.New()
 	NewHandler(service).Register(e)
 	request := httptest.NewRequest(http.MethodGet, "/analytics/summary?month=2026-09", nil)
@@ -64,7 +66,7 @@ func TestMonthlySummaryHandler(t *testing.T) {
 
 	e.ServeHTTP(response, request)
 
-	if response.Code != http.StatusOK || response.Body.String() != "{\"month\":\"2026-09\",\"income\":\"100.0000\",\"expense\":\"40.0000\"}\n" {
+	if response.Code != http.StatusOK || response.Body.String() != "{\"month\":\"2026-09\",\"income\":\"100.0000\",\"expense\":\"40.0000\",\"netBalance\":\"60.0000\"}\n" {
 		t.Fatalf("unexpected response: status=%d body=%q", response.Code, response.Body.String())
 	}
 	if service.userID != testUserID || service.requestID != "request-123" || service.month.Format("2006-01") != "2026-09" {

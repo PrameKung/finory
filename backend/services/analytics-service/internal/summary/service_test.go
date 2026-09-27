@@ -52,11 +52,28 @@ func TestMonthlySummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result != (MonthlySummary{Month: "2026-09", Income: "1000.3000", Expense: "30.0000"}) {
+	if result != (MonthlySummary{
+		Month: "2026-09", Income: "1000.3000", Expense: "30.0000", NetBalance: "970.3000",
+	}) {
 		t.Fatalf("unexpected summary: %+v", result)
 	}
 	if ledgerClient.userID != "user-1" || ledgerClient.requestID != "request-1" || !ledgerClient.month.Equal(month) {
 		t.Fatalf("ledger scope was not forwarded: %+v", ledgerClient)
+	}
+}
+
+func TestMonthlySummaryReturnsNegativeNetBalance(t *testing.T) {
+	service := NewService(&fakeLedger{transactions: []ledger.Transaction{
+		{Type: "income", Amount: "25.0000"},
+		{Type: "expense", Amount: "40.5000"},
+	}})
+
+	result, err := service.Monthly(context.Background(), "user-1", "", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.NetBalance != "-15.5000" {
+		t.Fatalf("net balance = %q, want -15.5000", result.NetBalance)
 	}
 }
 

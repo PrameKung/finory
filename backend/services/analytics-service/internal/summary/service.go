@@ -200,11 +200,13 @@ func (s *Service) Monthly(ctx context.Context, userID, requestID string, month t
 	if err != nil {
 		return MonthlySummary{}, err
 	}
+	netBalance := new(big.Rat).Sub(totals.income, totals.expense)
 
 	return MonthlySummary{
-		Month:   month.Format("2006-01"),
-		Income:  totals.income.FloatString(4),
-		Expense: totals.expense.FloatString(4),
+		Month:      month.Format("2006-01"),
+		Income:     totals.income.FloatString(4),
+		Expense:    totals.expense.FloatString(4),
+		NetBalance: netBalance.FloatString(4),
 	}, nil
 }
 
