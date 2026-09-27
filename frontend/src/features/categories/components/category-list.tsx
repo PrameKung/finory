@@ -20,6 +20,8 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { LoadingState } from "@/components/shared/loading-state";
+import { DeleteCategoryDialog } from "@/features/categories/components/delete-category-dialog";
+import { EditCategorySheet } from "@/features/categories/components/edit-category-sheet";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import type {
   Category,
@@ -81,6 +83,12 @@ function CategoryItem({ category }: { category: Category }) {
           {category.isDefault ? "Default category" : "Custom category"}
         </p>
       </div>
+      {!category.isDefault ? (
+        <div className="flex shrink-0 items-center gap-1">
+          <EditCategorySheet category={category} />
+          <DeleteCategoryDialog category={category} />
+        </div>
+      ) : null}
     </li>
   );
 }

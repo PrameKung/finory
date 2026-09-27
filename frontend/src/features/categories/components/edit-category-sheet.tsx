@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircleIcon, PlusIcon } from "lucide-react";
+import { LoaderCircleIcon, PencilIcon } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -16,9 +16,12 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { CategoryFormFields } from "@/features/categories/components/category-form-fields";
-import { createCategorySchema } from "@/features/categories/schemas/category-schema";
-import { useCreateCategory } from "@/features/categories/hooks/use-create-category";
-import type { CreateCategoryInput } from "@/features/categories/types/category";
+import { useUpdateCategory } from "@/features/categories/hooks/use-update-category";
+import { updateCategorySchema } from "@/features/categories/schemas/category-schema";
+import type {
+  Category,
+  UpdateCategoryInput,
+} from "@/features/categories/types/category";
 import { ApiError } from "@/lib/api/client";
 
 function mutationErrorMessage(error: Error | null) {
@@ -26,40 +29,38 @@ function mutationErrorMessage(error: Error | null) {
     return "A category with this name and type already exists.";
   }
 
-  if (error instanceof ApiError && error.status === 400) {
-    return "Check the category details and try again.";
+  if (error instanceof ApiError && error.status === 404) {
+    return "This category no longer exists or cannot be edited.";
   }
 
-  return "We could not create this category. Please try again.";
+  return "We could not update this category. Please try again.";
 }
 
-export function CreateCategorySheet() {
+export function EditCategorySheet({ category }: { category: Category }) {
   const [open, setOpen] = useState(false);
-  const createCategory = useCreateCategory();
+  const updateCategory = useUpdateCategory();
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<CreateCategoryInput>({
-    resolver: zodResolver(createCategorySchema),
+  } = useForm<UpdateCategoryInput>({
+    resolver: zodResolver(updateCategorySchema),
     defaultValues: {
-      name: "",
-      type: "expense",
+      name: category.name,
+      type: category.type,
     },
   });
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
-    if (!nextOpen) {
-      reset();
-      createCategory.reset();
-    }
+    reset({ name: category.name, type: category.type });
+    updateCategory.reset();
   }
 
-  async function onSubmit(input: CreateCategoryInput) {
+  async function onSubmit(input: UpdateCategoryInput) {
     try {
-      await createCategory.mutateAsync(input);
+      await updateCategory.mutateAsync({ id: category.id, input });
       handleOpenChange(false);
     } catch {
       // The mutation error is rendered below the form fields.
@@ -69,38 +70,41 @@ export function CreateCategorySheet() {
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button type="button" size="lg">
-          <PlusIcon data-icon="inline-start" aria-hidden="true" />
-          New category
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Edit ${category.name}`}
+        >
+          <PencilIcon aria-hidden="true" />
         </Button>
       </SheetTrigger>
       <SheetContent className="w-[min(26rem,100vw)] sm:max-w-md">
         <SheetHeader className="border-b px-5 py-5 pr-14">
-          <SheetTitle className="text-lg">Create category</SheetTitle>
+          <SheetTitle className="text-lg">Edit category</SheetTitle>
           <SheetDescription>
-            Add a custom category for organizing your transactions.
+            Update the name or type for {category.name}.
           </SheetDescription>
         </SheetHeader>
 
         <form
-          id="create-category-form"
           className="flex flex-1 flex-col"
           onSubmit={handleSubmit(onSubmit)}
           noValidate
         >
           <div className="flex-1 space-y-6 overflow-y-auto px-5 py-6">
             <CategoryFormFields
-              nameId="create-category-name"
+              nameId={`edit-category-name-${category.id}`}
               register={register}
               errors={errors}
             />
 
-            {createCategory.isError ? (
+            {updateCategory.isError ? (
               <p
                 role="alert"
                 className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
               >
-                {mutationErrorMessage(createCategory.error)}
+                {mutationErrorMessage(updateCategory.error)}
               </p>
             ) : null}
           </div>
@@ -110,18 +114,18 @@ export function CreateCategorySheet() {
               type="button"
               variant="outline"
               onClick={() => handleOpenChange(false)}
-              disabled={createCategory.isPending}
+              disabled={updateCategory.isPending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={createCategory.isPending}>
-              {createCategory.isPending ? (
+            <Button type="submit" disabled={updateCategory.isPending}>
+              {updateCategory.isPending ? (
                 <LoaderCircleIcon
                   className="animate-spin motion-reduce:animate-none"
                   aria-hidden="true"
                 />
               ) : null}
-              {createCategory.isPending ? "Creating…" : "Create category"}
+              {updateCategory.isPending ? "Saving…" : "Save changes"}
             </Button>
           </SheetFooter>
         </form>

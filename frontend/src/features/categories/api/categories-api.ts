@@ -1,6 +1,12 @@
-import { categoriesSchema } from "@/features/categories/schemas/category-schema";
-import type { Category } from "@/features/categories/types/category";
-import type { CreateCategoryInput } from "@/features/categories/types/category";
+import {
+  categoriesSchema,
+  categorySchema,
+} from "@/features/categories/schemas/category-schema";
+import type {
+  Category,
+  CreateCategoryInput,
+  UpdateCategoryInput,
+} from "@/features/categories/types/category";
 import { apiRequest } from "@/lib/api/client";
 
 const categoriesPath = "/api/v1/categories";
@@ -33,5 +39,26 @@ export async function createCategory(
     }),
   });
 
-  return categoriesSchema.element.parse(data);
+  return categorySchema.parse(data);
+}
+
+export async function updateCategory(
+  id: string,
+  input: UpdateCategoryInput,
+): Promise<Category> {
+  const data = await apiRequest<unknown>(`${categoriesPath}/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  return categorySchema.parse(data);
+}
+
+export function deleteCategory(id: string) {
+  return apiRequest<void>(`${categoriesPath}/${id}`, {
+    method: "DELETE",
+  });
 }
