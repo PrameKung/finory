@@ -11,6 +11,8 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { LoadingState } from "@/components/shared/loading-state";
+import { DeleteWalletDialog } from "@/features/wallets/components/delete-wallet-dialog";
+import { EditWalletSheet } from "@/features/wallets/components/edit-wallet-sheet";
 import { useWallets } from "@/features/wallets/hooks/use-wallets";
 import type {
   Wallet,
@@ -65,6 +67,12 @@ function WalletItem({ wallet }: { wallet: Wallet }) {
           </div>
           <p className="text-xs text-muted-foreground">{details.label}</p>
         </div>
+        {!wallet.isDefault ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <EditWalletSheet wallet={wallet} />
+            <DeleteWalletDialog wallet={wallet} />
+          </div>
+        ) : null}
       </div>
       <div className="mt-6">
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

@@ -14,3 +14,27 @@ export const walletSchema = z.object({
 });
 
 export const walletsSchema = z.array(walletSchema);
+
+const walletFormSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Enter a wallet name.")
+    .max(100, "Wallet names must be 100 characters or fewer."),
+  type: walletTypeSchema,
+  balance: z
+    .string()
+    .trim()
+    .min(1, "Enter a balance.")
+    .regex(
+      /^-?(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$/,
+      "Enter a valid balance with up to four decimal places.",
+    ),
+  currencyCode: z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{3}$/, "Enter a three-letter currency code."),
+});
+
+export const createWalletSchema = walletFormSchema;
+export const updateWalletSchema = walletFormSchema;
