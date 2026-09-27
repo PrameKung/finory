@@ -14,3 +14,12 @@ export const categorySchema = z.object({
 });
 
 export const categoriesSchema = z.array(categorySchema);
+
+export const createCategorySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Enter a category name.")
+    .max(100, "Category names must be 100 characters or fewer."),
+  type: categoryTypeSchema,
+});

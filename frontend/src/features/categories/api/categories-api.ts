@@ -1,5 +1,6 @@
 import { categoriesSchema } from "@/features/categories/schemas/category-schema";
 import type { Category } from "@/features/categories/types/category";
+import type { CreateCategoryInput } from "@/features/categories/types/category";
 import { apiRequest } from "@/lib/api/client";
 
 const categoriesPath = "/api/v1/categories";
@@ -15,4 +16,22 @@ export async function getCategories(): Promise<Category[]> {
   });
 
   return categoriesSchema.parse(data);
+}
+
+export async function createCategory(
+  input: CreateCategoryInput,
+): Promise<Category> {
+  const data = await apiRequest<unknown>(categoriesPath, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...input,
+      icon: "",
+      color: "",
+    }),
+  });
+
+  return categoriesSchema.element.parse(data);
 }
