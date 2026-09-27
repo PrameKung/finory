@@ -68,3 +68,9 @@ export async function updateTransaction(
 
   return transactionSchema.parse(data);
 }
+
+export function deleteTransaction(id: string) {
+  return apiRequest<void>(`${transactionsPath}/${id}`, {
+    method: "DELETE",
+  });
+}

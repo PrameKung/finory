@@ -15,6 +15,7 @@ import { LoadingState } from "@/components/shared/loading-state";
 import { Button } from "@/components/ui/button";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import type { Category } from "@/features/categories/types/category";
+import { DeleteTransactionDialog } from "@/features/transactions/components/delete-transaction-dialog";
 import { EditTransactionSheet } from "@/features/transactions/components/edit-transaction-sheet";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
 import type {
@@ -186,7 +187,7 @@ function TransactionTable({
               <th scope="col" className="px-5 py-3">Wallet</th>
               <th scope="col" className="px-5 py-3">Date</th>
               <th scope="col" className="px-5 py-3 text-right">Amount</th>
-              <th scope="col" className="w-12 px-3 py-3">
+              <th scope="col" className="w-20 px-3 py-3">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -224,7 +225,10 @@ function TransactionTable({
                     <TransactionAmount transaction={transaction} wallet={wallet} />
                   </td>
                   <td className="px-3 py-4 text-right">
-                    <EditTransactionSheet transaction={transaction} />
+                    <div className="flex items-center justify-end gap-1">
+                      <EditTransactionSheet transaction={transaction} />
+                      <DeleteTransactionDialog transaction={transaction} />
+                    </div>
                   </td>
                 </tr>
               );
@@ -267,7 +271,10 @@ function TransactionCards({
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1 text-right text-sm">
               <TransactionAmount transaction={transaction} wallet={wallet} />
-              <EditTransactionSheet transaction={transaction} />
+              <div className="flex items-center gap-1">
+                <EditTransactionSheet transaction={transaction} />
+                <DeleteTransactionDialog transaction={transaction} />
+              </div>
             </div>
           </li>
         );
