@@ -135,7 +135,7 @@ func newOAuthFixture(t *testing.T) *oauthFixture {
 		Endpoint:    oauth2.Endpoint{AuthURL: f.provider.URL + "/authorize", TokenURL: f.provider.URL + "/token"},
 	}
 	e := echo.New()
-	NewHandler(oauth, verifier, NewService(f.users, []byte(testSecret)), "http://localhost:3000/").Register(e)
+	NewHandler(oauth, verifier, NewService(f.users, []byte(testSecret)), "http://localhost:3000/dashboard").Register(e)
 	f.handler = e
 	return f
 }
@@ -204,7 +204,7 @@ func TestGoogleOAuthCreatesAndReusesUser(t *testing.T) {
 		f.signIDToken(t, nonce)
 		state := strings.Split(cookie.Value, ".")[0]
 		response := f.callback(cookie, "code=good-code&state="+url.QueryEscape(state))
-		if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "http://localhost:3000/" {
+		if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "http://localhost:3000/dashboard" {
 			t.Fatalf("callback status = %d, location = %q, body = %s", response.Code, response.Header().Get("Location"), response.Body.String())
 		}
 		var access *http.Cookie

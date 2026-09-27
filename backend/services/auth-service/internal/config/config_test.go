@@ -8,13 +8,13 @@ func TestLoad(t *testing.T) {
 	t.Setenv("GOOGLE_CLIENT_ID", "test-client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "test-client-secret")
 	t.Setenv("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback")
-	t.Setenv("APP_REDIRECT_URL", "http://localhost:3000/")
+	t.Setenv("APP_REDIRECT_URL", "http://localhost:3000/dashboard")
 	t.Setenv("JWT_ACCESS_SECRET", "test-secret-with-at-least-32-bytes")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Port != "8081" || cfg.DatabaseURL != "postgresql://example/auth_db" {
+	if cfg.Port != "8081" || cfg.DatabaseURL != "postgresql://example/auth_db" || cfg.AppRedirectURL != "http://localhost:3000/dashboard" {
 		t.Fatalf("unexpected auth configuration: %+v", cfg)
 	}
 
