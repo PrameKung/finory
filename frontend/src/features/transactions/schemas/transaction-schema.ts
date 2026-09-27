@@ -42,3 +42,5 @@ export const createTransactionSchema = z.object({
       "Select a valid date.",
     ),
 });
+
+export const updateTransactionSchema = createTransactionSchema;

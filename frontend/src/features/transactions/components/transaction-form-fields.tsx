@@ -32,6 +32,7 @@ type TransactionFormFieldsProps = {
   categories: Category[];
   wallets: Wallet[];
   referencesPending: boolean;
+  onTypeChange?: () => void;
 };
 
 function FieldError({ id, message }: { id: string; message?: string }) {
@@ -50,6 +51,7 @@ export function TransactionFormFields({
   categories,
   wallets,
   referencesPending,
+  onTypeChange,
 }: TransactionFormFieldsProps) {
   const availableCategories = categories.filter(
     (category) => category.type === selectedType,
@@ -72,7 +74,7 @@ export function TransactionFormFields({
                 type="radio"
                 value={type.value}
                 className="sr-only"
-                {...register("type")}
+                {...register("type", { onChange: onTypeChange })}
               />
               <span className="text-sm font-medium">{type.label}</span>
               <span className="text-xs text-muted-foreground">

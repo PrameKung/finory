@@ -15,6 +15,7 @@ import { LoadingState } from "@/components/shared/loading-state";
 import { Button } from "@/components/ui/button";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import type { Category } from "@/features/categories/types/category";
+import { EditTransactionSheet } from "@/features/transactions/components/edit-transaction-sheet";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
 import type {
   Transaction,
@@ -185,6 +186,9 @@ function TransactionTable({
               <th scope="col" className="px-5 py-3">Wallet</th>
               <th scope="col" className="px-5 py-3">Date</th>
               <th scope="col" className="px-5 py-3 text-right">Amount</th>
+              <th scope="col" className="w-12 px-3 py-3">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -218,6 +222,9 @@ function TransactionTable({
                   </td>
                   <td className="px-5 py-4 text-right">
                     <TransactionAmount transaction={transaction} wallet={wallet} />
+                  </td>
+                  <td className="px-3 py-4 text-right">
+                    <EditTransactionSheet transaction={transaction} />
                   </td>
                 </tr>
               );
@@ -258,8 +265,9 @@ function TransactionCards({
                 {format(parseISO(transaction.transactionDate), "MMM d, yyyy")}
               </p>
             </div>
-            <div className="text-right text-sm">
+            <div className="flex shrink-0 flex-col items-end gap-1 text-right text-sm">
               <TransactionAmount transaction={transaction} wallet={wallet} />
+              <EditTransactionSheet transaction={transaction} />
             </div>
           </li>
         );

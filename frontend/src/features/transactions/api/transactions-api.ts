@@ -6,6 +6,7 @@ import type {
   CreateTransactionInput,
   Transaction,
   TransactionFilters,
+  UpdateTransactionInput,
 } from "@/features/transactions/types/transaction";
 import { apiRequest } from "@/lib/api/client";
 
@@ -44,6 +45,21 @@ export async function createTransaction(
 ): Promise<Transaction> {
   const data = await apiRequest<unknown>(transactionsPath, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  return transactionSchema.parse(data);
+}
+
+export async function updateTransaction(
+  id: string,
+  input: UpdateTransactionInput,
+): Promise<Transaction> {
+  const data = await apiRequest<unknown>(`${transactionsPath}/${id}`, {
+    method: "PATCH",
     headers: {
       "Content-Type": "application/json",
     },
