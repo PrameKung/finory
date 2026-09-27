@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import {
   Sheet,
   SheetContent,
@@ -53,6 +54,10 @@ export function EditCategorySheet({ category }: { category: Category }) {
   });
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && updateCategory.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
     reset({ name: category.name, type: category.type });
     updateCategory.reset();
@@ -79,7 +84,10 @@ export function EditCategorySheet({ category }: { category: Category }) {
           <PencilIcon aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[min(26rem,100vw)] sm:max-w-md">
+      <SheetContent
+        className="w-[min(26rem,100vw)] sm:max-w-md"
+        closeDisabled={updateCategory.isPending}
+      >
         <SheetHeader className="border-b px-5 py-5 pr-14">
           <SheetTitle className="text-lg">Edit category</SheetTitle>
           <SheetDescription>
@@ -100,12 +108,9 @@ export function EditCategorySheet({ category }: { category: Category }) {
             />
 
             {updateCategory.isError ? (
-              <p
-                role="alert"
-                className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-              >
+              <InlineMessage>
                 {mutationErrorMessage(updateCategory.error)}
-              </p>
+              </InlineMessage>
             ) : null}
           </div>
 

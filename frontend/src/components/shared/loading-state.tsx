@@ -19,7 +19,7 @@ export function LoadingState({
       aria-busy="true"
       aria-live="polite"
       className={cn(
-        "flex min-h-64 w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card px-6 py-12 text-center",
+        "flex min-h-64 w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-card px-6 py-12 text-center",
         className,
       )}
     >

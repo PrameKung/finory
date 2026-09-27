@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import {
   Sheet,
   SheetContent,
@@ -72,6 +73,10 @@ export function CreateTransactionSheet() {
     availableCategories.length > 0 && (walletsQuery.data?.length ?? 0) > 0;
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && createTransaction.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
 
     if (nextOpen) {
@@ -102,7 +107,10 @@ export function CreateTransactionSheet() {
           Add transaction
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[min(32rem,100vw)] sm:max-w-lg">
+      <SheetContent
+        className="w-[min(32rem,100vw)] sm:max-w-lg"
+        closeDisabled={createTransaction.isPending}
+      >
         <SheetHeader className="border-b px-5 py-5 pr-14">
           <SheetTitle className="text-lg">Add transaction</SheetTitle>
           <SheetDescription>
@@ -128,10 +136,7 @@ export function CreateTransactionSheet() {
             />
 
             {referencesError ? (
-              <p
-                role="alert"
-                className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-              >
+              <InlineMessage>
                 {getApiErrorMessage(
                   categoriesQuery.error ?? walletsQuery.error,
                   {
@@ -139,11 +144,11 @@ export function CreateTransactionSheet() {
                       "Categories or wallets could not be loaded. Close this form and try again.",
                   },
                 )}
-              </p>
+              </InlineMessage>
             ) : null}
 
             {!referencesPending && !referencesError && !hasRequiredReferences ? (
-              <p className="rounded-lg border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+              <InlineMessage variant="info">
                 You need a {selectedType} category and a wallet before adding
                 this transaction. Manage them in{" "}
                 <Link href="/categories" className="font-medium text-foreground underline underline-offset-4">
@@ -154,16 +159,13 @@ export function CreateTransactionSheet() {
                   Wallets
                 </Link>
                 .
-              </p>
+              </InlineMessage>
             ) : null}
 
             {createTransaction.isError ? (
-              <p
-                role="alert"
-                className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-              >
+              <InlineMessage>
                 {mutationErrorMessage(createTransaction.error)}
-              </p>
+              </InlineMessage>
             ) : null}
           </div>
 

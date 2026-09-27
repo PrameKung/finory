@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import {
   Sheet,
   SheetContent,
@@ -50,6 +51,10 @@ export function CreateWalletSheet() {
   });
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && createWallet.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
     if (!nextOpen) {
       reset();
@@ -74,7 +79,10 @@ export function CreateWalletSheet() {
           New wallet
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[min(28rem,100vw)] sm:max-w-md">
+      <SheetContent
+        className="w-[min(28rem,100vw)] sm:max-w-md"
+        closeDisabled={createWallet.isPending}
+      >
         <SheetHeader className="border-b px-5 py-5 pr-14">
           <SheetTitle className="text-lg">Create wallet</SheetTitle>
           <SheetDescription>
@@ -95,12 +103,9 @@ export function CreateWalletSheet() {
             />
 
             {createWallet.isError ? (
-              <p
-                role="alert"
-                className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-              >
+              <InlineMessage>
                 {mutationErrorMessage(createWallet.error)}
-              </p>
+              </InlineMessage>
             ) : null}
           </div>
 

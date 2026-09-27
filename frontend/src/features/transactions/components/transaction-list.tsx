@@ -111,7 +111,7 @@ function TransactionFiltersBar({ filters }: { filters: TransactionFilters }) {
           type="month"
           value={filters.month ?? ""}
           onChange={(event) => updateFilter("month", event.target.value)}
-          className="h-9 rounded-lg border bg-background px-3 text-sm font-normal outline-none transition-shadow focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-10 rounded-lg border bg-background px-3 text-sm font-normal outline-none transition-shadow focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
       </label>
 
@@ -120,7 +120,7 @@ function TransactionFiltersBar({ filters }: { filters: TransactionFilters }) {
         <select
           value={filters.type ?? ""}
           onChange={(event) => updateFilter("type", event.target.value)}
-          className="h-9 rounded-lg border bg-background px-3 text-sm font-normal outline-none transition-shadow focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-10 rounded-lg border bg-background px-3 text-sm font-normal outline-none transition-shadow focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="">All types</option>
           <option value="income">Income</option>

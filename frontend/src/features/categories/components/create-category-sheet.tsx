@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import {
   Sheet,
   SheetContent,
@@ -49,6 +50,10 @@ export function CreateCategorySheet() {
   });
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && createCategory.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
     if (!nextOpen) {
       reset();
@@ -73,7 +78,10 @@ export function CreateCategorySheet() {
           New category
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[min(26rem,100vw)] sm:max-w-md">
+      <SheetContent
+        className="w-[min(26rem,100vw)] sm:max-w-md"
+        closeDisabled={createCategory.isPending}
+      >
         <SheetHeader className="border-b px-5 py-5 pr-14">
           <SheetTitle className="text-lg">Create category</SheetTitle>
           <SheetDescription>
@@ -95,12 +103,9 @@ export function CreateCategorySheet() {
             />
 
             {createCategory.isError ? (
-              <p
-                role="alert"
-                className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-              >
+              <InlineMessage>
                 {mutationErrorMessage(createCategory.error)}
-              </p>
+              </InlineMessage>
             ) : null}
           </div>
 

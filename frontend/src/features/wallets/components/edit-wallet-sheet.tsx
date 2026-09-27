@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import {
   Sheet,
   SheetContent,
@@ -55,6 +56,10 @@ export function EditWalletSheet({ wallet }: { wallet: Wallet }) {
   });
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && updateWallet.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
     reset(values);
     updateWallet.reset();
@@ -81,7 +86,10 @@ export function EditWalletSheet({ wallet }: { wallet: Wallet }) {
           <PencilIcon aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[min(28rem,100vw)] sm:max-w-md">
+      <SheetContent
+        className="w-[min(28rem,100vw)] sm:max-w-md"
+        closeDisabled={updateWallet.isPending}
+      >
         <SheetHeader className="border-b px-5 py-5 pr-14">
           <SheetTitle className="text-lg">Edit wallet</SheetTitle>
           <SheetDescription>
@@ -102,12 +110,9 @@ export function EditWalletSheet({ wallet }: { wallet: Wallet }) {
             />
 
             {updateWallet.isError ? (
-              <p
-                role="alert"
-                className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-              >
+              <InlineMessage>
                 {mutationErrorMessage(updateWallet.error)}
-              </p>
+              </InlineMessage>
             ) : null}
           </div>
 

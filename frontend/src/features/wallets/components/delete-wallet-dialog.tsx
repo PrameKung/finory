@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import { useDeleteWallet } from "@/features/wallets/hooks/use-delete-wallet";
 import type { Wallet } from "@/features/wallets/types/wallet";
 import { getApiErrorMessage } from "@/lib/api/client";
@@ -34,6 +35,10 @@ export function DeleteWalletDialog({ wallet }: { wallet: Wallet }) {
   const deleteWallet = useDeleteWallet();
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && deleteWallet.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
     if (!nextOpen) {
       deleteWallet.reset();
@@ -71,12 +76,9 @@ export function DeleteWalletDialog({ wallet }: { wallet: Wallet }) {
         </AlertDialogHeader>
 
         {deleteWallet.isError ? (
-          <p
-            role="alert"
-            className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-          >
+          <InlineMessage className="mt-4">
             {mutationErrorMessage(deleteWallet.error)}
-          </p>
+          </InlineMessage>
         ) : null}
 
         <AlertDialogFooter>

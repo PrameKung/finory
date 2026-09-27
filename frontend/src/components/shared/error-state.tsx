@@ -38,9 +38,11 @@ export function ErrorState({
         </p>
       </div>
       {onRetry ? (
-        <Button type="button" variant="outline" onClick={onRetry}>
-          {retryLabel}
-        </Button>
+        <div className="pt-1">
+          <Button type="button" variant="outline" onClick={onRetry}>
+            {retryLabel}
+          </Button>
+        </div>
       ) : null}
     </div>
   );

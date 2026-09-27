@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import { useDeleteCategory } from "@/features/categories/hooks/use-delete-category";
 import type { Category } from "@/features/categories/types/category";
 import { getApiErrorMessage } from "@/lib/api/client";
@@ -35,6 +36,10 @@ export function DeleteCategoryDialog({ category }: { category: Category }) {
   const deleteCategory = useDeleteCategory();
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && deleteCategory.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
     if (!nextOpen) {
       deleteCategory.reset();
@@ -73,12 +78,9 @@ export function DeleteCategoryDialog({ category }: { category: Category }) {
         </AlertDialogHeader>
 
         {deleteCategory.isError ? (
-          <p
-            role="alert"
-            className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-          >
+          <InlineMessage className="mt-4">
             {mutationErrorMessage(deleteCategory.error)}
-          </p>
+          </InlineMessage>
         ) : null}
 
         <AlertDialogFooter>

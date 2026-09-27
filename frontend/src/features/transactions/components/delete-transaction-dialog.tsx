@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
 import { useDeleteTransaction } from "@/features/transactions/hooks/use-delete-transaction";
 import type { Transaction } from "@/features/transactions/types/transaction";
 import { getApiErrorMessage } from "@/lib/api/client";
@@ -39,6 +40,10 @@ export function DeleteTransactionDialog({
   const transactionLabel = transaction.description || `${transaction.type} transaction`;
 
   function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && deleteTransaction.isPending) {
+      return;
+    }
+
     setOpen(nextOpen);
     if (!nextOpen) {
       deleteTransaction.reset();
@@ -77,12 +82,9 @@ export function DeleteTransactionDialog({
         </AlertDialogHeader>
 
         {deleteTransaction.isError ? (
-          <p
-            role="alert"
-            className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-          >
+          <InlineMessage className="mt-4">
             {mutationErrorMessage(deleteTransaction.error)}
-          </p>
+          </InlineMessage>
         ) : null}
 
         <AlertDialogFooter>
