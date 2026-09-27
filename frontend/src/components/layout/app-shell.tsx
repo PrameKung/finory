@@ -21,6 +21,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { SessionIdentity } from "@/features/auth/components/session-identity";
+import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 import { cn } from "@/lib/utils";
 
 const navigationItems = [
@@ -86,6 +88,7 @@ function Navigation({ pathname, onNavigate }: NavigationProps) {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const user = useAuthSession();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
 
   return (
@@ -104,8 +107,8 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex-1 overflow-y-auto p-3">
           <Navigation pathname={pathname} />
         </div>
-        <div className="border-t px-5 py-4 text-xs text-sidebar-foreground/60">
-          Personal finance, made clear.
+        <div className="border-t px-5 py-4">
+          <SessionIdentity user={user} />
         </div>
       </aside>
 
@@ -131,15 +134,21 @@ export function AppShell({ children }: AppShellProps) {
                   Navigate between Finory application pages.
                 </SheetDescription>
               </SheetHeader>
-              <div className="overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto p-3">
                 <Navigation
                   pathname={pathname}
                   onNavigate={() => setMobileNavigationOpen(false)}
                 />
               </div>
+              <div className="border-t px-5 py-4">
+                <SessionIdentity user={user} />
+              </div>
             </SheetContent>
           </Sheet>
           <Brand />
+          <div className="ml-auto">
+            <SessionIdentity compact user={user} />
+          </div>
         </header>
 
         <main

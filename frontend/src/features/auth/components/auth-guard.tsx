@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from "react";
 import { ErrorState } from "@/components/shared/error-state";
 import { LoadingState } from "@/components/shared/loading-state";
 import { useCurrentUser } from "@/features/auth/hooks/use-current-user";
+import { AuthSessionProvider } from "@/features/auth/providers/auth-session-provider";
 
 type AuthGuardProps = {
   children: ReactNode;
@@ -46,5 +47,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  return children;
+  return (
+    <AuthSessionProvider user={currentUser.data}>
+      {children}
+    </AuthSessionProvider>
+  );
 }
