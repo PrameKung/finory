@@ -4,6 +4,7 @@ import { ExpenseDistributionChart } from "@/features/dashboard/components/expens
 import { IncomeExpenseTrendChart } from "@/features/dashboard/components/income-expense-trend-chart";
 import { MonthlyComparison } from "@/features/dashboard/components/monthly-comparison";
 import { MonthlySummaryCard } from "@/features/dashboard/components/monthly-summary-card";
+import { RecentTransactions } from "@/features/dashboard/components/recent-transactions";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -40,6 +41,10 @@ export default function DashboardPage() {
 
       <section aria-label="Monthly comparison">
         <MonthlyComparison />
+      </section>
+
+      <section aria-label="Recent activity">
+        <RecentTransactions />
       </section>
     </div>
   );

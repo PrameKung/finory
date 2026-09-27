@@ -18,6 +18,7 @@ import type { Category } from "@/features/categories/types/category";
 import { DeleteTransactionDialog } from "@/features/transactions/components/delete-transaction-dialog";
 import { EditTransactionSheet } from "@/features/transactions/components/edit-transaction-sheet";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
+import { formatTransactionAmount } from "@/features/transactions/lib/format-transaction-amount";
 import type {
   Transaction,
   TransactionFilters,
@@ -42,32 +43,6 @@ function getFilters(searchParams: URLSearchParams): TransactionFilters {
   };
 }
 
-function formatAmount(amount: string, currencyCode?: string) {
-  const value = Number(amount);
-
-  if (!Number.isFinite(value)) {
-    return currencyCode ? `${amount} ${currencyCode}` : amount;
-  }
-
-  if (!currencyCode) {
-    return new Intl.NumberFormat(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 4,
-    }).format(value);
-  }
-
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 4,
-    }).format(value);
-  } catch {
-    return `${amount} ${currencyCode}`;
-  }
-}
-
 function TransactionAmount({
   transaction,
   wallet,
@@ -85,7 +60,7 @@ function TransactionAmount({
       )}
     >
       {isIncome ? "+" : "−"}
-      {formatAmount(transaction.amount, wallet?.currencyCode)}
+      {formatTransactionAmount(transaction.amount, wallet?.currencyCode)}
     </span>
   );
 }
