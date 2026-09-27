@@ -15,6 +15,7 @@ import (
 // New returns the HTTP handler for this service.
 func New(cfg config.Config) http.Handler {
 	e := echo.New()
+	registerAPIDocs(e)
 	e.Use(middleware.RequestIDWithConfig(middleware.RequestIDConfig{
 		RequestIDHandler: func(c *echo.Context, requestID string) {
 			c.Request().Header.Set(echo.HeaderXRequestID, requestID)
@@ -63,6 +64,10 @@ func New(cfg config.Config) http.Handler {
 	e.Any("/api/v1/auth/*", proxyAuth, requireAccessToken)
 	ledgerService := httputil.NewSingleHostReverseProxy(cfg.LedgerServiceURL)
 	ledgerService.ModifyResponse = removeUpstreamRequestID
+	e.GET("/api/v1/ledger/health", func(c *echo.Context) error {
+		http.StripPrefix("/api/v1/ledger", ledgerService).ServeHTTP(c.Response(), c.Request())
+		return nil
+	})
 	ledgerProxy := http.StripPrefix("/api/v1", ledgerService)
 	proxyLedger := func(c *echo.Context) error {
 		ledgerProxy.ServeHTTP(c.Response(), c.Request())

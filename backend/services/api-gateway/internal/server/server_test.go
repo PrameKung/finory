@@ -114,6 +114,27 @@ func TestAuthServiceHealthRoute(t *testing.T) {
 	}
 }
 
+func TestLedgerServiceHealthRoute(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/health" {
+			t.Errorf("unexpected upstream health request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	ledgerURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	newTestGateway(config.Config{LedgerServiceURL: ledgerURL}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/ledger/health", nil))
+	if response.Code != http.StatusOK || response.Body.String() != `{"status":"ok"}` {
+		t.Fatalf("unexpected ledger health response: status=%d, body=%q", response.Code, response.Body.String())
+	}
+}
+
 func TestGatewayHealth(t *testing.T) {
 	response := httptest.NewRecorder()
 	newTestGateway(config.Config{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health", nil))

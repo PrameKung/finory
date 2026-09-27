@@ -1,0 +1,140 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Finory API",
+    "version": "1.0.0",
+    "description": "Public API exposed by the Finory API Gateway. Monetary values are decimal strings and backend timestamps are UTC."
+  },
+  "servers": [{ "url": "/", "description": "Current API Gateway" }],
+  "tags": [
+    { "name": "Authentication" }, { "name": "Transactions" },
+    { "name": "Categories" }, { "name": "Wallets" },
+    { "name": "Budgets" }, { "name": "Analytics" }, { "name": "Health" }
+  ],
+  "security": [{ "bearerAuth": [] }, { "accessCookie": [] }],
+  "paths": {
+    "/health": { "get": { "tags": ["Health"], "summary": "Check API Gateway health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
+    "/api/v1/auth/health": { "get": { "tags": ["Health"], "summary": "Check Auth Service health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
+    "/api/v1/ledger/health": { "get": { "tags": ["Health"], "summary": "Check Ledger Service health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
+    "/api/v1/analytics/health": { "get": { "tags": ["Health"], "summary": "Check Analytics Service health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
+    "/api/v1/auth/google": {
+      "get": { "tags": ["Authentication"], "summary": "Start Google sign-in", "description": "Sets an OAuth flow cookie and redirects to Google.", "security": [], "responses": { "302": { "description": "Redirect to Google" }, "500": { "$ref": "#/components/responses/Failure" } } }
+    },
+    "/api/v1/auth/google/callback": {
+      "get": { "tags": ["Authentication"], "summary": "Complete Google sign-in", "description": "Google OAuth callback. Sets application cookies and redirects to the frontend.", "security": [], "parameters": [{ "name": "state", "in": "query", "required": true, "schema": { "type": "string" } }, { "name": "code", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "303": { "description": "Signed in" }, "400": { "$ref": "#/components/responses/Invalid" }, "500": { "$ref": "#/components/responses/Failure" } } }
+    },
+    "/api/v1/auth/me": {
+      "get": { "tags": ["Authentication"], "summary": "Get the current user", "responses": { "200": { "description": "Current user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" }, "500": { "$ref": "#/components/responses/Failure" } } }
+    },
+    "/api/v1/auth/refresh": {
+      "post": { "tags": ["Authentication"], "summary": "Refresh the session", "description": "Rotates the refresh cookie. Browser requests must come from an allowed Origin.", "security": [{ "refreshCookie": [] }], "responses": { "204": { "description": "Session refreshed" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "500": { "$ref": "#/components/responses/Failure" } } }
+    },
+    "/api/v1/auth/logout": {
+      "post": { "tags": ["Authentication"], "summary": "Log out and clear application cookies", "responses": { "204": { "description": "Logged out" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "500": { "$ref": "#/components/responses/Failure" } } }
+    },
+    "/api/v1/transactions": {
+      "get": { "tags": ["Transactions"], "summary": "List transactions", "parameters": [{ "$ref": "#/components/parameters/Month" }, { "name": "type", "in": "query", "schema": { "$ref": "#/components/schemas/TransactionType" } }], "responses": { "200": { "description": "Transactions", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Transaction" } } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "401": { "$ref": "#/components/responses/Unauthorized" } } },
+      "post": { "tags": ["Transactions"], "summary": "Create a transaction", "requestBody": { "$ref": "#/components/requestBodies/TransactionCreate" }, "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Transaction" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "401": { "$ref": "#/components/responses/Unauthorized" } } }
+    },
+    "/api/v1/transactions/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/ID" }],
+      "get": { "tags": ["Transactions"], "summary": "Get a transaction", "responses": { "200": { "description": "Transaction", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Transaction" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "404": { "$ref": "#/components/responses/NotFound" } } },
+      "patch": { "tags": ["Transactions"], "summary": "Update a transaction", "requestBody": { "$ref": "#/components/requestBodies/TransactionUpdate" }, "responses": { "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Transaction" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "404": { "$ref": "#/components/responses/NotFound" } } },
+      "delete": { "tags": ["Transactions"], "summary": "Delete a transaction", "responses": { "204": { "description": "Deleted" }, "400": { "$ref": "#/components/responses/Invalid" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "404": { "$ref": "#/components/responses/NotFound" } } }
+    },
+    "/api/v1/categories": {
+      "get": { "tags": ["Categories"], "summary": "List categories", "responses": { "200": { "description": "Categories", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } } } } }, "401": { "$ref": "#/components/responses/Unauthorized" } } },
+      "post": { "tags": ["Categories"], "summary": "Create a category", "requestBody": { "$ref": "#/components/requestBodies/CategoryCreate" }, "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "409": { "$ref": "#/components/responses/Conflict" } } }
+    },
+    "/api/v1/categories/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/ID" }],
+      "patch": { "tags": ["Categories"], "summary": "Update a custom category", "requestBody": { "$ref": "#/components/requestBodies/CategoryUpdate" }, "responses": { "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" } } },
+      "delete": { "tags": ["Categories"], "summary": "Delete a custom category", "responses": { "204": { "description": "Deleted" }, "400": { "$ref": "#/components/responses/Invalid" }, "404": { "$ref": "#/components/responses/NotFound" } } }
+    },
+    "/api/v1/wallets": {
+      "get": { "tags": ["Wallets"], "summary": "List wallets", "responses": { "200": { "description": "Wallets", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Wallet" } } } } }, "401": { "$ref": "#/components/responses/Unauthorized" } } },
+      "post": { "tags": ["Wallets"], "summary": "Create a wallet", "requestBody": { "$ref": "#/components/requestBodies/WalletCreate" }, "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Wallet" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "409": { "$ref": "#/components/responses/Conflict" } } }
+    },
+    "/api/v1/wallets/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/ID" }],
+      "patch": { "tags": ["Wallets"], "summary": "Update a custom wallet", "requestBody": { "$ref": "#/components/requestBodies/WalletUpdate" }, "responses": { "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Wallet" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" } } },
+      "delete": { "tags": ["Wallets"], "summary": "Delete a custom wallet", "responses": { "204": { "description": "Deleted" }, "400": { "$ref": "#/components/responses/Invalid" }, "404": { "$ref": "#/components/responses/NotFound" } } }
+    },
+    "/api/v1/budgets": {
+      "get": { "tags": ["Budgets"], "summary": "List budgets", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Budgets", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Budget" } } } } }, "400": { "$ref": "#/components/responses/Invalid" } } },
+      "post": { "tags": ["Budgets"], "summary": "Create a budget", "requestBody": { "$ref": "#/components/requestBodies/BudgetCreate" }, "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Budget" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "409": { "$ref": "#/components/responses/Conflict" } } }
+    },
+    "/api/v1/budgets/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/ID" }],
+      "patch": { "tags": ["Budgets"], "summary": "Update a budget", "requestBody": { "$ref": "#/components/requestBodies/BudgetUpdate" }, "responses": { "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Budget" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" } } },
+      "delete": { "tags": ["Budgets"], "summary": "Delete a budget", "responses": { "204": { "description": "Deleted" }, "400": { "$ref": "#/components/responses/Invalid" }, "404": { "$ref": "#/components/responses/NotFound" } } }
+    },
+    "/api/v1/analytics/summary": { "$ref": "#/components/pathItems/MonthlySummary" },
+    "/api/v1/analytics/categories": { "$ref": "#/components/pathItems/CategoryAnalytics" },
+    "/api/v1/analytics/trends": { "$ref": "#/components/pathItems/Trends" },
+    "/api/v1/analytics/monthly": { "$ref": "#/components/pathItems/MonthlyComparison" }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+      "accessCookie": { "type": "apiKey", "in": "cookie", "name": "finory_access" },
+      "refreshCookie": { "type": "apiKey", "in": "cookie", "name": "finory_refresh" }
+    },
+    "parameters": {
+      "ID": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "Month": { "name": "month", "in": "query", "description": "Calendar month (analytics defaults to the current UTC month)", "schema": { "$ref": "#/components/schemas/Month" } }
+    },
+    "responses": {
+      "Healthy": { "description": "Service is running", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } } },
+      "Invalid": { "description": "Invalid request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Unauthorized": { "description": "Missing or invalid authentication", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Forbidden": { "description": "Origin is not allowed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "NotFound": { "description": "Resource not found for this user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Conflict": { "description": "Resource already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Failure": { "description": "Operation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "AnalyticsFailure": { "description": "Ledger Service is unavailable", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "requestBodies": {
+      "TransactionCreate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransactionInput" } } } },
+      "TransactionUpdate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransactionPatch" } } } },
+      "CategoryCreate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryInput" } } } },
+      "CategoryUpdate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryPatch" } } } },
+      "WalletCreate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WalletInput" } } } },
+      "WalletUpdate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WalletPatch" } } } },
+      "BudgetCreate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BudgetInput" } } } },
+      "BudgetUpdate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BudgetPatch" } } } }
+    },
+    "schemas": {
+      "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string", "example": "invalid_request" } } },
+      "Health": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "const": "ok" } } },
+      "UUID": { "type": "string", "format": "uuid" },
+      "Month": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$", "example": "2026-09" },
+      "Money": { "type": "string", "description": "Decimal string with at most four fractional digits", "example": "1250.50" },
+      "TransactionType": { "type": "string", "enum": ["income", "expense"] },
+      "User": { "type": "object", "required": ["id", "email", "displayName", "avatarUrl"], "properties": { "id": { "$ref": "#/components/schemas/UUID" }, "email": { "type": "string", "format": "email" }, "displayName": { "type": "string" }, "avatarUrl": { "type": "string", "format": "uri" } } },
+      "TransactionInput": { "type": "object", "required": ["categoryId", "walletId", "type", "amount", "transactionDate"], "additionalProperties": false, "properties": { "categoryId": { "$ref": "#/components/schemas/UUID" }, "walletId": { "$ref": "#/components/schemas/UUID" }, "type": { "$ref": "#/components/schemas/TransactionType" }, "amount": { "$ref": "#/components/schemas/Money" }, "description": { "type": "string", "maxLength": 500 }, "transactionDate": { "type": "string", "format": "date" } } },
+      "TransactionPatch": { "type": "object", "minProperties": 1, "additionalProperties": false, "properties": { "categoryId": { "$ref": "#/components/schemas/UUID" }, "walletId": { "$ref": "#/components/schemas/UUID" }, "type": { "$ref": "#/components/schemas/TransactionType" }, "amount": { "$ref": "#/components/schemas/Money" }, "description": { "type": "string", "maxLength": 500 }, "transactionDate": { "type": "string", "format": "date" } } },
+      "Transaction": { "allOf": [{ "$ref": "#/components/schemas/TransactionInput" }, { "type": "object", "required": ["id", "createdAt", "updatedAt"], "properties": { "id": { "$ref": "#/components/schemas/UUID" }, "description": { "type": ["string", "null"] }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" } } }] },
+      "CategoryInput": { "type": "object", "required": ["name", "type"], "additionalProperties": false, "properties": { "name": { "type": "string", "maxLength": 100 }, "type": { "$ref": "#/components/schemas/TransactionType" }, "icon": { "type": "string", "maxLength": 100 }, "color": { "type": "string", "maxLength": 100 } } },
+      "CategoryPatch": { "type": "object", "minProperties": 1, "additionalProperties": false, "properties": { "name": { "type": "string", "maxLength": 100 }, "type": { "$ref": "#/components/schemas/TransactionType" }, "icon": { "type": "string", "maxLength": 100 }, "color": { "type": "string", "maxLength": 100 } } },
+      "Category": { "type": "object", "required": ["id", "name", "type", "isDefault", "createdAt", "updatedAt"], "properties": { "id": { "$ref": "#/components/schemas/UUID" }, "name": { "type": "string" }, "type": { "$ref": "#/components/schemas/TransactionType" }, "icon": { "type": ["string", "null"] }, "color": { "type": ["string", "null"] }, "isDefault": { "type": "boolean" }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" } } },
+      "WalletInput": { "type": "object", "required": ["name", "type", "currencyCode"], "additionalProperties": false, "properties": { "name": { "type": "string", "maxLength": 100 }, "type": { "type": "string", "enum": ["cash", "bank", "e_wallet", "other"] }, "balance": { "$ref": "#/components/schemas/Money" }, "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$", "example": "THB" } } },
+      "WalletPatch": { "type": "object", "minProperties": 1, "additionalProperties": false, "properties": { "name": { "type": "string", "maxLength": 100 }, "type": { "type": "string", "enum": ["cash", "bank", "e_wallet", "other"] }, "balance": { "$ref": "#/components/schemas/Money" }, "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" } } },
+      "Wallet": { "allOf": [{ "$ref": "#/components/schemas/WalletInput" }, { "type": "object", "required": ["id", "balance", "isDefault", "createdAt", "updatedAt"], "properties": { "id": { "$ref": "#/components/schemas/UUID" }, "balance": { "$ref": "#/components/schemas/Money" }, "isDefault": { "type": "boolean" }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" } } }] },
+      "BudgetInput": { "type": "object", "required": ["categoryId", "amount", "month"], "additionalProperties": false, "properties": { "categoryId": { "$ref": "#/components/schemas/UUID" }, "amount": { "$ref": "#/components/schemas/Money" }, "month": { "$ref": "#/components/schemas/Month" } } },
+      "BudgetPatch": { "type": "object", "minProperties": 1, "additionalProperties": false, "properties": { "categoryId": { "$ref": "#/components/schemas/UUID" }, "amount": { "$ref": "#/components/schemas/Money" }, "month": { "$ref": "#/components/schemas/Month" } } },
+      "Budget": { "allOf": [{ "$ref": "#/components/schemas/BudgetInput" }, { "type": "object", "required": ["id", "createdAt", "updatedAt"], "properties": { "id": { "$ref": "#/components/schemas/UUID" }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" } } }] },
+      "MonthlySummary": { "type": "object", "properties": { "month": { "$ref": "#/components/schemas/Month" }, "income": { "$ref": "#/components/schemas/Money" }, "expense": { "$ref": "#/components/schemas/Money" } } },
+      "CategoryDistribution": { "type": "object", "properties": { "month": { "$ref": "#/components/schemas/Month" }, "totalExpense": { "$ref": "#/components/schemas/Money" }, "categories": { "type": "array", "items": { "type": "object", "properties": { "rank": { "type": "integer" }, "categoryId": { "$ref": "#/components/schemas/UUID" }, "name": { "type": "string" }, "icon": { "type": ["string", "null"] }, "color": { "type": ["string", "null"] }, "amount": { "$ref": "#/components/schemas/Money" }, "percentage": { "type": "string" } } } } } },
+      "TrendSeries": { "type": "object", "properties": { "month": { "$ref": "#/components/schemas/Month" }, "granularity": { "type": "string", "const": "day" }, "points": { "type": "array", "items": { "type": "object", "properties": { "date": { "type": "string", "format": "date" }, "income": { "$ref": "#/components/schemas/Money" }, "expense": { "$ref": "#/components/schemas/Money" } } } } } },
+      "MonthlyComparison": { "type": "object", "properties": { "month": { "$ref": "#/components/schemas/Month" }, "previousMonth": { "$ref": "#/components/schemas/Month" }, "current": { "$ref": "#/components/schemas/MonthlySummary" }, "previous": { "$ref": "#/components/schemas/MonthlySummary" }, "changes": { "type": "object", "properties": { "income": { "$ref": "#/components/schemas/AmountChange" }, "expense": { "$ref": "#/components/schemas/AmountChange" } } } } },
+      "AmountChange": { "type": "object", "properties": { "amount": { "$ref": "#/components/schemas/Money" }, "percentage": { "type": ["string", "null"] } } }
+    },
+    "pathItems": {
+      "MonthlySummary": { "get": { "tags": ["Analytics"], "summary": "Get monthly income and expense totals", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Summary", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthlySummary" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
+      "CategoryAnalytics": { "get": { "tags": ["Analytics"], "summary": "Get expense distribution by category", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Distribution", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryDistribution" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
+      "Trends": { "get": { "tags": ["Analytics"], "summary": "Get daily income and expense trends", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Trends", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TrendSeries" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
+      "MonthlyComparison": { "get": { "tags": ["Analytics"], "summary": "Compare a month with the previous month", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Comparison", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthlyComparison" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } }
+    }
+  }
+}
