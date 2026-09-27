@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { AuthGuard } from "@/features/auth/components/auth-guard";
 
 type AuthenticatedLayoutProps = {
   children: ReactNode;
@@ -9,5 +10,9 @@ type AuthenticatedLayoutProps = {
 export default function AuthenticatedLayout({
   children,
 }: AuthenticatedLayoutProps) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AuthGuard>
+      <AppShell>{children}</AppShell>
+    </AuthGuard>
+  );
 }
