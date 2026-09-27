@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ExpenseDistributionChart } from "@/features/dashboard/components/expense-distribution-chart";
+import { IncomeExpenseTrendChart } from "@/features/dashboard/components/income-expense-trend-chart";
 import { MonthlySummaryCard } from "@/features/dashboard/components/monthly-summary-card";
 
 export const metadata: Metadata = {
@@ -30,6 +31,10 @@ export default function DashboardPage() {
 
       <section aria-label="Expense analytics">
         <ExpenseDistributionChart />
+      </section>
+
+      <section aria-label="Income and expense analytics">
+        <IncomeExpenseTrendChart />
       </section>
     </div>
   );
