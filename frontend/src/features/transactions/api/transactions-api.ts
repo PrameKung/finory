@@ -1,5 +1,9 @@
-import { transactionsSchema } from "@/features/transactions/schemas/transaction-schema";
+import {
+  transactionSchema,
+  transactionsSchema,
+} from "@/features/transactions/schemas/transaction-schema";
 import type {
+  CreateTransactionInput,
   Transaction,
   TransactionFilters,
 } from "@/features/transactions/types/transaction";
@@ -33,4 +37,18 @@ export async function getTransactions(
   );
 
   return transactionsSchema.parse(data);
+}
+
+export async function createTransaction(
+  input: CreateTransactionInput,
+): Promise<Transaction> {
+  const data = await apiRequest<unknown>(transactionsPath, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  return transactionSchema.parse(data);
 }
