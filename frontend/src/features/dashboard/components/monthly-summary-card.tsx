@@ -11,6 +11,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { useMonthlySummary } from "@/features/dashboard/hooks/use-monthly-summary";
+import { formatAmount } from "@/features/dashboard/lib/format-amount";
 import { cn } from "@/lib/utils";
 
 type SummaryMetric = "income" | "expense" | "netBalance";
@@ -38,19 +39,6 @@ const metricConfig: Record<SummaryMetric, MetricConfig> = {
     iconClassName: "bg-muted text-muted-foreground",
   },
 };
-
-function formatAmount(amount: string) {
-  const value = Number(amount);
-
-  if (!Number.isFinite(value)) {
-    return amount;
-  }
-
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(value);
-}
 
 export function MonthlySummaryCard({ metric }: { metric: SummaryMetric }) {
   const summaryQuery = useMonthlySummary();
