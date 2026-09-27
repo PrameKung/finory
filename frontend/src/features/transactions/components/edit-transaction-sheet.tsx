@@ -25,7 +25,7 @@ import type {
   UpdateTransactionInput,
 } from "@/features/transactions/types/transaction";
 import { useWallets } from "@/features/wallets/hooks/use-wallets";
-import { ApiError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/client";
 
 function transactionValues(transaction: Transaction): UpdateTransactionInput {
   return {
@@ -38,23 +38,17 @@ function transactionValues(transaction: Transaction): UpdateTransactionInput {
   };
 }
 
-function mutationErrorMessage(error: Error | null) {
-  if (error instanceof ApiError && error.status === 404) {
-    return "This transaction no longer exists or cannot be edited.";
-  }
-
-  if (
-    error instanceof ApiError &&
-    error.code === "invalid_transaction_reference"
-  ) {
-    return "The selected category or wallet is no longer available. Refresh your selections and try again.";
-  }
-
-  if (error instanceof ApiError && error.status === 400) {
-    return "Check the transaction details and try again.";
-  }
-
-  return "We could not update this transaction. Please try again.";
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage: "We could not update this transaction. Please try again.",
+    codeMessages: {
+      transaction_not_found:
+        "This transaction no longer exists or cannot be edited.",
+      invalid_transaction_reference:
+        "The selected category or wallet is no longer available. Refresh your selections and try again.",
+      invalid_request: "Check the transaction details and try again.",
+    },
+  });
 }
 
 export function EditTransactionSheet({
@@ -145,8 +139,13 @@ export function EditTransactionSheet({
                 role="alert"
                 className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
               >
-                Categories or wallets could not be loaded. Close this form and
-                try again.
+                {getApiErrorMessage(
+                  categoriesQuery.error ?? walletsQuery.error,
+                  {
+                    defaultMessage:
+                      "Categories or wallets could not be loaded. Close this form and try again.",
+                  },
+                )}
               </p>
             ) : null}
 

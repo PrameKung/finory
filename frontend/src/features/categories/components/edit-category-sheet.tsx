@@ -22,18 +22,18 @@ import type {
   Category,
   UpdateCategoryInput,
 } from "@/features/categories/types/category";
-import { ApiError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/client";
 
-function mutationErrorMessage(error: Error | null) {
-  if (error instanceof ApiError && error.status === 409) {
-    return "A category with this name and type already exists.";
-  }
-
-  if (error instanceof ApiError && error.status === 404) {
-    return "This category no longer exists or cannot be edited.";
-  }
-
-  return "We could not update this category. Please try again.";
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage: "We could not update this category. Please try again.",
+    codeMessages: {
+      category_already_exists:
+        "A category with this name and type already exists.",
+      category_not_found: "This category no longer exists or cannot be edited.",
+      invalid_request: "Check the category details and try again.",
+    },
+  });
 }
 
 export function EditCategorySheet({ category }: { category: Category }) {

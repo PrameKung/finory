@@ -1,20 +1,15 @@
 import { env } from "@/lib/env";
+import { ApiError, parseApiErrorBody } from "@/lib/api/errors";
+
+export { ApiError, getApiErrorMessage } from "@/lib/api/errors";
 
 const apiBaseUrl = env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
 
-type ApiErrorBody = {
-  error?: unknown;
-};
-
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code?: string;
-
-  constructor(status: number, code?: string) {
-    super(code ?? `API request failed with status ${status}`);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
+async function readApiError(response: Response) {
+  try {
+    return parseApiErrorBody(await response.json());
+  } catch {
+    return {};
   }
 }
 
@@ -31,28 +26,35 @@ export async function apiRequest<T>(
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
 
-  const response = await fetch(getApiUrl(path), {
-    ...init,
-    headers,
-    credentials: "include",
-  });
+  let response: Response;
 
-  if (!response.ok) {
-    let code: string | undefined;
-
-    try {
-      const body = (await response.json()) as ApiErrorBody;
-      code = typeof body.error === "string" ? body.error : undefined;
-    } catch {
-      // The status still provides a useful error when the body is not JSON.
+  try {
+    response = await fetch(getApiUrl(path), {
+      ...init,
+      headers,
+      credentials: "include",
+    });
+  } catch (error) {
+    if (init.signal?.aborted) {
+      throw error;
     }
 
-    throw new ApiError(response.status, code);
+    throw new ApiError(0, "network_error", { cause: error });
+  }
+
+  if (!response.ok) {
+    const { code, message } = await readApiError(response);
+
+    throw new ApiError(response.status, code, { message });
   }
 
   if (response.status === 204) {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch (error) {
+    throw new ApiError(response.status, "invalid_response", { cause: error });
+  }
 }

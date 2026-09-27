@@ -17,6 +17,7 @@ import { useCategories } from "@/features/categories/hooks/use-categories";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
 import { formatTransactionAmount } from "@/features/transactions/lib/format-transaction-amount";
 import { useWallets } from "@/features/wallets/hooks/use-wallets";
+import { getApiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 const recentTransactionLimit = 5;
@@ -56,7 +57,10 @@ export function RecentTransactions() {
     return (
       <ErrorState
         title="Recent transactions unavailable"
-        description="We could not load your latest financial activity."
+        description={getApiErrorMessage(
+          transactionsQuery.error ?? categoriesQuery.error ?? walletsQuery.error,
+          { defaultMessage: "We could not load your latest financial activity." },
+        )}
         className="min-h-80"
         onRetry={retry}
       />

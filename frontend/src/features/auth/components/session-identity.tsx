@@ -5,6 +5,7 @@ import { LoaderCircleIcon, LogOutIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLogout } from "@/features/auth/hooks/use-logout";
 import type { AuthUser } from "@/features/auth/types/user";
+import { getApiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 type SessionIdentityProps = {
@@ -74,7 +75,9 @@ export function SessionIdentity({ compact = false, user }: SessionIdentityProps)
       </div>
       {!compact && logout.isError ? (
         <p role="alert" className="text-xs leading-5 text-destructive">
-          Could not sign out. Please try again.
+          {getApiErrorMessage(logout.error, {
+            defaultMessage: "Could not sign out. Please try again.",
+          })}
         </p>
       ) : null}
     </div>

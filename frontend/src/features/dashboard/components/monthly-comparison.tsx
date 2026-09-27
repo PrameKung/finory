@@ -13,6 +13,7 @@ import { LoadingState } from "@/components/shared/loading-state";
 import { useMonthlyComparison } from "@/features/dashboard/hooks/use-monthly-comparison";
 import { formatAmount } from "@/features/dashboard/lib/format-amount";
 import type { MonthlyComparison as MonthlyComparisonData } from "@/features/dashboard/types/monthly-comparison";
+import { getApiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 type ComparisonMetric = "income" | "expense";
@@ -122,7 +123,10 @@ export function MonthlyComparison() {
     return (
       <ErrorState
         title="Monthly comparison unavailable"
-        description="We could not compare this month with the previous month."
+        description={getApiErrorMessage(comparisonQuery.error, {
+          defaultMessage:
+            "We could not compare this month with the previous month.",
+        })}
         className="min-h-72"
         onRetry={() => comparisonQuery.refetch()}
       />

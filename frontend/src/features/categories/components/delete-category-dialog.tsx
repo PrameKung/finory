@@ -17,6 +17,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { useDeleteCategory } from "@/features/categories/hooks/use-delete-category";
 import type { Category } from "@/features/categories/types/category";
+import { getApiErrorMessage } from "@/lib/api/client";
+
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage:
+      "We could not delete this category. It may be in use by a transaction.",
+    codeMessages: {
+      category_not_found:
+        "This category no longer exists or has already been deleted.",
+    },
+  });
+}
 
 export function DeleteCategoryDialog({ category }: { category: Category }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +77,7 @@ export function DeleteCategoryDialog({ category }: { category: Category }) {
             role="alert"
             className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
           >
-            We could not delete this category. It may be in use by a transaction.
+            {mutationErrorMessage(deleteCategory.error)}
           </p>
         ) : null}
 

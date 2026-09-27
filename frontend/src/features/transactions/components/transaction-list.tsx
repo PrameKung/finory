@@ -26,6 +26,7 @@ import type {
 } from "@/features/transactions/types/transaction";
 import { useWallets } from "@/features/wallets/hooks/use-wallets";
 import type { Wallet } from "@/features/wallets/types/wallet";
+import { getApiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -294,7 +295,13 @@ export function TransactionList() {
     content = (
       <ErrorState
         title="Could not load transactions"
-        description="Your transaction history is temporarily unavailable. Please try again."
+        description={getApiErrorMessage(
+          transactionsQuery.error ?? categoriesQuery.error ?? walletsQuery.error,
+          {
+            defaultMessage:
+              "Your transaction history is temporarily unavailable. Please try again.",
+          },
+        )}
         onRetry={retry}
       />
     );

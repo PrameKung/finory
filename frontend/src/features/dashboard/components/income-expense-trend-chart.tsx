@@ -17,6 +17,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { LoadingState } from "@/components/shared/loading-state";
 import { useTrendSeries } from "@/features/dashboard/hooks/use-trend-series";
 import { formatAmount } from "@/features/dashboard/lib/format-amount";
+import { getApiErrorMessage } from "@/lib/api/client";
 
 const incomeColor = "#047857";
 const expenseColor = "var(--destructive)";
@@ -49,7 +50,9 @@ export function IncomeExpenseTrendChart() {
     return (
       <ErrorState
         title="Income and expense trend unavailable"
-        description="We could not load this month's daily activity."
+        description={getApiErrorMessage(trendQuery.error, {
+          defaultMessage: "We could not load this month's daily activity.",
+        })}
         className="min-h-96"
         onRetry={() => trendQuery.refetch()}
       />

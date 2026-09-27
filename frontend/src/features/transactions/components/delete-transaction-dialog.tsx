@@ -17,14 +17,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { useDeleteTransaction } from "@/features/transactions/hooks/use-delete-transaction";
 import type { Transaction } from "@/features/transactions/types/transaction";
-import { ApiError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/client";
 
-function mutationErrorMessage(error: Error | null) {
-  if (error instanceof ApiError && error.status === 404) {
-    return "This transaction no longer exists or has already been deleted.";
-  }
-
-  return "We could not delete this transaction. Please try again.";
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage: "We could not delete this transaction. Please try again.",
+    codeMessages: {
+      transaction_not_found:
+        "This transaction no longer exists or has already been deleted.",
+    },
+  });
 }
 
 export function DeleteTransactionDialog({

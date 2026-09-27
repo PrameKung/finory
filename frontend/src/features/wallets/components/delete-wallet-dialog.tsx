@@ -17,6 +17,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { useDeleteWallet } from "@/features/wallets/hooks/use-delete-wallet";
 import type { Wallet } from "@/features/wallets/types/wallet";
+import { getApiErrorMessage } from "@/lib/api/client";
+
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage:
+      "We could not delete this wallet. It may be in use by a transaction.",
+    codeMessages: {
+      wallet_not_found: "This wallet no longer exists or has already been deleted.",
+    },
+  });
+}
 
 export function DeleteWalletDialog({ wallet }: { wallet: Wallet }) {
   const [open, setOpen] = useState(false);
@@ -64,7 +75,7 @@ export function DeleteWalletDialog({ wallet }: { wallet: Wallet }) {
             role="alert"
             className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
           >
-            We could not delete this wallet. It may be in use by a transaction.
+            {mutationErrorMessage(deleteWallet.error)}
           </p>
         ) : null}
 

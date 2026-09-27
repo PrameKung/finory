@@ -15,6 +15,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { LoadingState } from "@/components/shared/loading-state";
 import { useCategoryDistribution } from "@/features/dashboard/hooks/use-category-distribution";
 import { formatAmount } from "@/features/dashboard/lib/format-amount";
+import { getApiErrorMessage } from "@/lib/api/client";
 
 const fallbackColors = [
   "var(--chart-5)",
@@ -47,7 +48,9 @@ export function ExpenseDistributionChart() {
     return (
       <ErrorState
         title="Expense distribution unavailable"
-        description="We could not load this month's category breakdown."
+        description={getApiErrorMessage(distributionQuery.error, {
+          defaultMessage: "We could not load this month's category breakdown.",
+        })}
         className="min-h-96"
         onRetry={() => distributionQuery.refetch()}
       />

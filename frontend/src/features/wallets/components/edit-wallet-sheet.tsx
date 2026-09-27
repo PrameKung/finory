@@ -22,18 +22,17 @@ import type {
   UpdateWalletInput,
   Wallet,
 } from "@/features/wallets/types/wallet";
-import { ApiError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/client";
 
-function mutationErrorMessage(error: Error | null) {
-  if (error instanceof ApiError && error.status === 409) {
-    return "A wallet with this name already exists.";
-  }
-
-  if (error instanceof ApiError && error.status === 404) {
-    return "This wallet no longer exists or cannot be edited.";
-  }
-
-  return "We could not update this wallet. Please try again.";
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage: "We could not update this wallet. Please try again.",
+    codeMessages: {
+      wallet_already_exists: "A wallet with this name already exists.",
+      wallet_not_found: "This wallet no longer exists or cannot be edited.",
+      invalid_request: "Check the wallet details and try again.",
+    },
+  });
 }
 
 export function EditWalletSheet({ wallet }: { wallet: Wallet }) {

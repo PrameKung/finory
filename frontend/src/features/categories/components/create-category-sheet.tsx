@@ -19,18 +19,17 @@ import { CategoryFormFields } from "@/features/categories/components/category-fo
 import { createCategorySchema } from "@/features/categories/schemas/category-schema";
 import { useCreateCategory } from "@/features/categories/hooks/use-create-category";
 import type { CreateCategoryInput } from "@/features/categories/types/category";
-import { ApiError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/client";
 
-function mutationErrorMessage(error: Error | null) {
-  if (error instanceof ApiError && error.status === 409) {
-    return "A category with this name and type already exists.";
-  }
-
-  if (error instanceof ApiError && error.status === 400) {
-    return "Check the category details and try again.";
-  }
-
-  return "We could not create this category. Please try again.";
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage: "We could not create this category. Please try again.",
+    codeMessages: {
+      category_already_exists:
+        "A category with this name and type already exists.",
+      invalid_request: "Check the category details and try again.",
+    },
+  });
 }
 
 export function CreateCategorySheet() {

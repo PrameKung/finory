@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { LoadingState } from "@/components/shared/loading-state";
 import { useCurrentUser } from "@/features/auth/hooks/use-current-user";
 import { AuthSessionProvider } from "@/features/auth/providers/auth-session-provider";
+import { getApiErrorMessage } from "@/lib/api/client";
 
 type AuthGuardProps = {
   children: ReactNode;
@@ -28,7 +29,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
         <ErrorState
           className="max-w-lg bg-background"
           title="Unable to verify your session"
-          description="We could not confirm that you are signed in. Check your connection and try again."
+          description={getApiErrorMessage(currentUser.error, {
+            defaultMessage:
+              "We could not confirm that you are signed in. Please try again.",
+          })}
           onRetry={() => void currentUser.refetch()}
         />
       </div>

@@ -18,6 +18,7 @@ import type {
   Wallet,
   WalletType,
 } from "@/features/wallets/types/wallet";
+import { getApiErrorMessage } from "@/lib/api/client";
 
 const walletTypeDetails: Record<
   WalletType,
@@ -102,7 +103,10 @@ export function WalletList() {
     return (
       <ErrorState
         title="Could not load wallets"
-        description="Your wallets are temporarily unavailable. Please try again."
+        description={getApiErrorMessage(walletsQuery.error, {
+          defaultMessage:
+            "Your wallets are temporarily unavailable. Please try again.",
+        })}
         onRetry={() => void walletsQuery.refetch()}
       />
     );

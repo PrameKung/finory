@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useMonthlySummary } from "@/features/dashboard/hooks/use-monthly-summary";
 import { formatAmount } from "@/features/dashboard/lib/format-amount";
+import { getApiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 type SummaryMetric = "income" | "expense" | "netBalance";
@@ -71,7 +72,9 @@ export function MonthlySummaryCard({ metric }: { metric: SummaryMetric }) {
         <div className="space-y-1">
           <p className="text-sm font-medium">{label} unavailable</p>
           <p className="text-sm text-muted-foreground">
-            We could not load this month&apos;s financial summary.
+            {getApiErrorMessage(summaryQuery.error, {
+              defaultMessage: "We could not load this month's financial summary.",
+            })}
           </p>
         </div>
         <Button

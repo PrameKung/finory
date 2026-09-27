@@ -27,6 +27,7 @@ import type {
   Category,
   CategoryType,
 } from "@/features/categories/types/category";
+import { getApiErrorMessage } from "@/lib/api/client";
 
 const categoryIcons: Record<string, LucideIcon> = {
   "briefcase-business": BriefcaseBusinessIcon,
@@ -153,7 +154,10 @@ export function CategoryList() {
     return (
       <ErrorState
         title="Could not load categories"
-        description="Your categories are temporarily unavailable. Please try again."
+        description={getApiErrorMessage(categoriesQuery.error, {
+          defaultMessage:
+            "Your categories are temporarily unavailable. Please try again.",
+        })}
         onRetry={() => void categoriesQuery.refetch()}
       />
     );

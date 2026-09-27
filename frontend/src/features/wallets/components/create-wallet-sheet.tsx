@@ -19,18 +19,16 @@ import { WalletFormFields } from "@/features/wallets/components/wallet-form-fiel
 import { useCreateWallet } from "@/features/wallets/hooks/use-create-wallet";
 import { createWalletSchema } from "@/features/wallets/schemas/wallet-schema";
 import type { CreateWalletInput } from "@/features/wallets/types/wallet";
-import { ApiError } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/client";
 
-function mutationErrorMessage(error: Error | null) {
-  if (error instanceof ApiError && error.status === 409) {
-    return "A wallet with this name already exists.";
-  }
-
-  if (error instanceof ApiError && error.status === 400) {
-    return "Check the wallet details and try again.";
-  }
-
-  return "We could not create this wallet. Please try again.";
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage: "We could not create this wallet. Please try again.",
+    codeMessages: {
+      wallet_already_exists: "A wallet with this name already exists.",
+      invalid_request: "Check the wallet details and try again.",
+    },
+  });
 }
 
 export function CreateWalletSheet() {
