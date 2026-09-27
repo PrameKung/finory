@@ -131,31 +131,45 @@ export function ExpenseDistributionChart() {
           </div>
         </div>
 
-        <ol className="space-y-3" aria-label="Expense categories">
-          {chartData.map((category) => (
-            <li
-              key={category.categoryId}
-              className="flex items-center gap-3 text-sm"
-            >
-              <span
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: category.chartColor }}
-                aria-hidden="true"
-              />
-              <span className="min-w-0 flex-1 truncate font-medium">
-                {category.name}
-              </span>
-              <span className="text-right tabular-nums">
-                <span className="block font-medium">
-                  {formatAmount(category.amount)}
+        <div>
+          <div className="space-y-1">
+            <h3 className="font-heading text-base font-semibold">
+              Category ranking
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Highest spending first.
+            </p>
+          </div>
+
+          <ol className="mt-4 space-y-3" aria-label="Expense category ranking">
+            {chartData.map((category) => (
+              <li
+                key={category.categoryId}
+                className="flex items-center gap-3 text-sm"
+              >
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+                  {category.rank}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {category.percentage}%
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: category.chartColor }}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {category.name}
                 </span>
-              </span>
-            </li>
-          ))}
-        </ol>
+                <span className="text-right tabular-nums">
+                  <span className="block font-medium">
+                    {formatAmount(category.amount)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {category.percentage}%
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
     </article>
   );
