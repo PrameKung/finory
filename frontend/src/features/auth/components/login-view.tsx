@@ -6,8 +6,9 @@ export function LoginView() {
   return (
     <AuthPanel
       title="Welcome back"
-      description="Sign in to continue to your Finory dashboard."
+      description="Sign in with Google to continue to your Finory dashboard."
       actionLabel="Continue with Google"
+      appearance="plain"
       footer={
         <>
           New to Finory?{" "}
