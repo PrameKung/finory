@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -86,6 +87,9 @@ func serviceURL(name, fallback string) (*url.URL, error) {
 	raw := os.Getenv(name)
 	if raw == "" {
 		raw = fallback
+	}
+	if _, _, err := net.SplitHostPort(raw); err == nil {
+		raw = "http://" + raw
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {

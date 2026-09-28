@@ -23,6 +23,12 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("gateway service URL was not loaded: config=%+v, error=%v", cfg, err)
 	}
 
+	t.Setenv("AUTH_SERVICE_URL", "auth-service:10000")
+	cfg, err = Load()
+	if err != nil || cfg.AuthServiceURL.String() != "http://auth-service:10000" {
+		t.Fatalf("Render host and port were not normalized: config=%+v, error=%v", cfg, err)
+	}
+
 	t.Setenv("AUTH_SERVICE_URL", "not-a-url")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected invalid service URL to fail")

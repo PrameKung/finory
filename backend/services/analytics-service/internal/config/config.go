@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -25,6 +26,9 @@ func Load() (Config, error) {
 	rawURL := os.Getenv("LEDGER_SERVICE_URL")
 	if rawURL == "" {
 		rawURL = "http://localhost:8082"
+	}
+	if _, _, err := net.SplitHostPort(rawURL); err == nil {
+		rawURL = "http://" + rawURL
 	}
 	ledgerURL, err := url.Parse(rawURL)
 	if err != nil || (ledgerURL.Scheme != "http" && ledgerURL.Scheme != "https") || ledgerURL.Host == "" || ledgerURL.User != nil || ledgerURL.RawQuery != "" || ledgerURL.Fragment != "" || (ledgerURL.Path != "" && ledgerURL.Path != "/") {

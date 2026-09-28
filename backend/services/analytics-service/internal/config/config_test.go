@@ -19,6 +19,12 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("analytics service URL was not loaded: config=%+v, error=%v", cfg, err)
 	}
 
+	t.Setenv("LEDGER_SERVICE_URL", "ledger-service:10000")
+	cfg, err = Load()
+	if err != nil || cfg.LedgerServiceURL.String() != "http://ledger-service:10000" {
+		t.Fatalf("Render host and port were not normalized: config=%+v, error=%v", cfg, err)
+	}
+
 	t.Setenv("LEDGER_SERVICE_URL", "ftp://ledger-service:8082")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected invalid service URL to fail")
