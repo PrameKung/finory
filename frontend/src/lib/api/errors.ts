@@ -4,7 +4,7 @@ type ApiErrorBody = {
   message?: unknown;
 };
 
-export type ApiErrorDetails = {
+type ApiErrorDetails = {
   code?: string;
   message?: string;
 };

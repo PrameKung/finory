@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const amountSchema = z.string().regex(/^\d+(\.\d{1,4})?$/);
 
-export const categoryRankSchema = z.object({
+const categoryRankSchema = z.object({
   rank: z.number().int().positive(),
   categoryId: z.uuid(),
   name: z.string().min(1),
