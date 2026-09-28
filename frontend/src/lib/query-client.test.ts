@@ -25,3 +25,23 @@ test("a terminal unauthorized query expires the cached session without retrying"
   assert.equal(requests, 1);
   assert.equal(queryClient.getQueryData(currentUserQueryKey), null);
 });
+
+test("a terminal unauthorized mutation expires the cached session", async () => {
+  const queryClient = getQueryClient();
+  const currentUserQueryKey = ["auth", "current-user"] as const;
+
+  queryClient.setQueryData(currentUserQueryKey, { id: "user-id" });
+
+  const mutation = queryClient.getMutationCache().build(queryClient, {
+    mutationFn: async () => {
+      throw new ApiError(401, "unauthorized");
+    },
+  });
+
+  await assert.rejects(
+    mutation.execute(undefined),
+    (error) => error instanceof ApiError && error.status === 401,
+  );
+
+  assert.equal(queryClient.getQueryData(currentUserQueryKey), null);
+});

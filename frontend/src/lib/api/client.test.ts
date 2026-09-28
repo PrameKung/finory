@@ -119,3 +119,58 @@ test("apiRequest does not refresh repeatedly when the retried request is unautho
   assert.equal(protectedRequests, 2);
   assert.equal(refreshRequests, 1);
 });
+
+test("apiRequest supports successful responses without a body", async () => {
+  globalThis.fetch = async () => new Response(null, { status: 204 });
+
+  assert.equal(
+    await apiRequest<void>("/api/v1/transactions/transaction-id", {
+      method: "DELETE",
+    }),
+    undefined,
+  );
+});
+
+test("apiRequest normalizes network failures but preserves abort errors", async () => {
+  const networkFailure = new TypeError("fetch failed");
+  globalThis.fetch = async () => {
+    throw networkFailure;
+  };
+
+  await assert.rejects(
+    apiRequest("/api/v1/transactions"),
+    (error) =>
+      error instanceof ApiError &&
+      error.status === 0 &&
+      error.code === "network_error" &&
+      error.cause === networkFailure,
+  );
+
+  const controller = new AbortController();
+  const abortFailure = new DOMException("The operation was aborted", "AbortError");
+  controller.abort();
+  globalThis.fetch = async () => {
+    throw abortFailure;
+  };
+
+  await assert.rejects(
+    apiRequest("/api/v1/transactions", { signal: controller.signal }),
+    (error) => error === abortFailure,
+  );
+});
+
+test("apiRequest rejects a successful response with invalid JSON", async () => {
+  globalThis.fetch = async () =>
+    new Response("not-json", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  await assert.rejects(
+    apiRequest("/api/v1/transactions"),
+    (error) =>
+      error instanceof ApiError &&
+      error.status === 200 &&
+      error.code === "invalid_response",
+  );
+});
