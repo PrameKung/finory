@@ -3,16 +3,19 @@ package server
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	"finory/backend/services/analytics-service/internal/summary"
+
+	"github.com/labstack/echo/v5"
 )
 
 // New returns the HTTP handler for this service.
-func New() http.Handler {
-	r := chi.NewRouter()
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("{\"status\":\"ok\"}\n"))
+func New(summaryHandler *summary.Handler) http.Handler {
+	e := echo.New()
+	e.GET("/health", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
-	return r
+	if summaryHandler != nil {
+		summaryHandler.Register(e)
+	}
+	return e
 }

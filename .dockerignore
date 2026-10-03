@@ -1,0 +1,10 @@
+.git/
+.agents/
+.codex/
+frontend/
+docs/
+deployments/kubernetes/
+**/node_modules/
+**/.next/
+**/.env
+**/.env.*

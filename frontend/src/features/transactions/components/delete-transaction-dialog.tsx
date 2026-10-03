@@ -1,0 +1,118 @@
+"use client";
+
+import { LoaderCircleIcon, Trash2Icon } from "lucide-react";
+import { useState } from "react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { InlineMessage } from "@/components/shared/inline-message";
+import { useDeleteTransaction } from "@/features/transactions/hooks/use-delete-transaction";
+import type { Transaction } from "@/features/transactions/types/transaction";
+import { getApiErrorMessage } from "@/lib/api/client";
+
+function mutationErrorMessage(error: unknown) {
+  return getApiErrorMessage(error, {
+    defaultMessage: "We could not delete this transaction. Please try again.",
+    codeMessages: {
+      transaction_not_found:
+        "This transaction no longer exists or has already been deleted.",
+    },
+  });
+}
+
+export function DeleteTransactionDialog({
+  transaction,
+}: {
+  transaction: Transaction;
+}) {
+  const [open, setOpen] = useState(false);
+  const deleteTransaction = useDeleteTransaction();
+  const transactionLabel = transaction.description || `${transaction.type} transaction`;
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && deleteTransaction.isPending) {
+      return;
+    }
+
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      deleteTransaction.reset();
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      await deleteTransaction.mutateAsync(transaction.id);
+      handleOpenChange(false);
+    } catch {
+      // The mutation error is rendered in the confirmation dialog.
+    }
+  }
+
+  return (
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Delete ${transactionLabel}`}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2Icon aria-hidden="true" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes {transactionLabel}. This action cannot be
+            undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        {deleteTransaction.isError ? (
+          <InlineMessage className="mt-4">
+            {mutationErrorMessage(deleteTransaction.error)}
+          </InlineMessage>
+        ) : null}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel asChild>
+            <Button variant="outline" disabled={deleteTransaction.isPending}>
+              Cancel
+            </Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button
+              variant="destructive"
+              disabled={deleteTransaction.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+            >
+              {deleteTransaction.isPending ? (
+                <LoaderCircleIcon
+                  className="animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {deleteTransaction.isPending ? "Deleting…" : "Delete transaction"}
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}

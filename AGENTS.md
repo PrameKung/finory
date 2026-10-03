@@ -201,7 +201,7 @@ Those domains belong together inside the Ledger Service.
 Use:
 
 - Go
-- chi
+- Echo
 - pgx/v5
 - sqlc
 - goose

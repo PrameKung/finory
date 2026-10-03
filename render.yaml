@@ -1,0 +1,96 @@
+envVarGroups:
+  - name: finory-auth-shared
+    envVars:
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+
+services:
+  - type: pserv
+    name: finory-auth
+    runtime: docker
+    rootDir: backend/services/auth-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URL
+        sync: false
+      - key: APP_REDIRECT_URL
+        sync: false
+      - fromGroup: finory-auth-shared
+
+  - type: pserv
+    name: finory-ledger
+    runtime: docker
+    rootDir: backend/services/ledger-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false
+
+  - type: pserv
+    name: finory-analytics
+    runtime: docker
+    rootDir: backend/services/analytics-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: LEDGER_SERVICE_URL
+        fromService:
+          type: pserv
+          name: finory-ledger
+          property: hostport
+
+  - type: web
+    name: finory-api
+    runtime: docker
+    rootDir: backend/services/api-gateway
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: pserv
+          name: finory-auth
+          property: hostport
+      - key: LEDGER_SERVICE_URL
+        fromService:
+          type: pserv
+          name: finory-ledger
+          property: hostport
+      - key: ANALYTICS_SERVICE_URL
+        fromService:
+          type: pserv
+          name: finory-analytics
+          property: hostport
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - fromGroup: finory-auth-shared
+
+  - type: web
+    name: finory-web
+    runtime: docker
+    rootDir: frontend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /login
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
