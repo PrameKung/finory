@@ -38,63 +38,57 @@ func TestFrontendFacingTransactionPath(t *testing.T) {
 	repositoryRoot := findRepositoryRoot(t)
 	containerName := fmt.Sprintf("finory-integration-%d-%d", os.Getpid(), time.Now().UnixNano())
 	run(t, repositoryRoot, nil, "docker", "run", "--rm", "-d", "--name", containerName,
-		"-e", "POSTGRES_USER=finory", "-e", "POSTGRES_PASSWORD=finory", "-e", "POSTGRES_DB=ledger_db",
+		"-e", "POSTGRES_USER=finory", "-e", "POSTGRES_PASSWORD=finory", "-e", "POSTGRES_DB=postgres",
 		"-p", "127.0.0.1::5432", "postgres:16-alpine")
 	t.Cleanup(func() {
 		_ = exec.Command("docker", "rm", "-f", containerName).Run()
 	})
 
 	databasePort := waitForPostgres(t, repositoryRoot, containerName)
-	applyLedgerMigrations(t, repositoryRoot, containerName)
+	run(t, repositoryRoot, nil, "docker", "exec", containerName, "createdb", "-U", "finory", "auth_db")
+	run(t, repositoryRoot, nil, "docker", "exec", containerName, "createdb", "-U", "finory", "ledger_db")
+	applyMigrations(t, repositoryRoot, containerName)
 
 	temporaryDirectory := t.TempDir()
-	ledgerBinary := filepath.Join(temporaryDirectory, "ledger-service")
-	gatewayBinary := filepath.Join(temporaryDirectory, "api-gateway")
-	run(t, filepath.Join(repositoryRoot, "backend/services/ledger-service"), nil, "go", "build", "-o", ledgerBinary, "./cmd/api")
-	run(t, filepath.Join(repositoryRoot, "backend/services/api-gateway"), nil, "go", "build", "-o", gatewayBinary, "./cmd/api")
+	apiBinary := filepath.Join(temporaryDirectory, "finory-api")
+	run(t, filepath.Join(repositoryRoot, "backend/service"), nil, "go", "build", "-o", apiBinary, "./cmd/api")
 
-	ledgerPort := availablePort(t)
-	gatewayPort := availablePort(t)
-	ledgerURL := "http://127.0.0.1:" + ledgerPort
-	gatewayURL := "http://127.0.0.1:" + gatewayPort
-	stopLedger := startService(t, repositoryRoot, ledgerBinary, []string{
-		"PORT=" + ledgerPort,
-		"DATABASE_URL=postgresql://finory:finory@127.0.0.1:" + databasePort + "/ledger_db?sslmode=disable",
-	})
-	t.Cleanup(stopLedger)
-	waitForHealth(t, ledgerURL+"/health")
-
-	stopGateway := startService(t, repositoryRoot, gatewayBinary, []string{
-		"PORT=" + gatewayPort,
-		"AUTH_SERVICE_URL=http://127.0.0.1:1",
-		"LEDGER_SERVICE_URL=" + ledgerURL,
-		"ANALYTICS_SERVICE_URL=http://127.0.0.1:1",
+	apiPort := availablePort(t)
+	apiURL := "http://127.0.0.1:" + apiPort
+	stopAPI := startService(t, filepath.Join(repositoryRoot, "backend/service"), apiBinary, []string{
+		"PORT=" + apiPort,
+		"AUTH_DATABASE_URL=postgresql://finory:finory@127.0.0.1:" + databasePort + "/auth_db?sslmode=disable",
+		"LEDGER_DATABASE_URL=postgresql://finory:finory@127.0.0.1:" + databasePort + "/ledger_db?sslmode=disable",
+		"GOOGLE_CLIENT_ID=integration-client-id",
+		"GOOGLE_CLIENT_SECRET=integration-client-secret",
+		"GOOGLE_REDIRECT_URL=http://localhost:" + apiPort + "/api/v1/auth/google/callback",
+		"APP_REDIRECT_URL=http://localhost:3000/dashboard",
 		"CORS_ALLOWED_ORIGINS=http://localhost:3000",
 		"JWT_ACCESS_SECRET=" + integrationJWTSecret,
 	})
-	t.Cleanup(stopGateway)
-	waitForHealth(t, gatewayURL+"/health")
+	t.Cleanup(stopAPI)
+	waitForHealth(t, apiURL+"/health")
 
 	accessToken := signedAccessToken(t, integrationUserID)
-	category := postJSON(t, gatewayURL+"/api/v1/categories", accessToken, map[string]string{
+	category := postJSON(t, apiURL+"/api/v1/categories", accessToken, map[string]string{
 		"name": "Integration Expense", "type": "expense",
 	})
-	wallet := postJSON(t, gatewayURL+"/api/v1/wallets", accessToken, map[string]string{
+	wallet := postJSON(t, apiURL+"/api/v1/wallets", accessToken, map[string]string{
 		"name": "Integration Bank", "type": "bank", "balance": "100.00", "currencyCode": "THB",
 	})
-	transaction := postJSON(t, gatewayURL+"/api/v1/transactions", accessToken, map[string]string{
+	transaction := postJSON(t, apiURL+"/api/v1/transactions", accessToken, map[string]string{
 		"categoryId": category.ID, "walletId": wallet.ID, "type": "expense",
 		"amount": "42.50", "description": "frontend-path-integration", "transactionDate": "2026-09-27",
 	})
 
-	request, err := http.NewRequest(http.MethodGet, gatewayURL+"/api/v1/transactions/"+transaction.ID, nil)
+	request, err := http.NewRequest(http.MethodGet, apiURL+"/api/v1/transactions/"+transaction.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("Authorization", "Bearer "+accessToken)
 	response, err := (&http.Client{Timeout: 5 * time.Second}).Do(request)
 	if err != nil {
-		t.Fatalf("read transaction through gateway: %v", err)
+		t.Fatalf("read transaction through API: %v", err)
 	}
 	defer response.Body.Close()
 	responseBody, err := io.ReadAll(response.Body)
@@ -102,7 +96,7 @@ func TestFrontendFacingTransactionPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	if response.StatusCode != http.StatusOK || !bytes.Contains(responseBody, []byte(`"id":"`+transaction.ID+`"`)) {
-		t.Fatalf("gateway read response = %d %s", response.StatusCode, responseBody)
+		t.Fatalf("API read response = %d %s", response.StatusCode, responseBody)
 	}
 
 	if !uuidPattern.MatchString(transaction.ID) {
@@ -192,7 +186,7 @@ func waitForPostgres(t *testing.T, workingDirectory, containerName string) strin
 			}
 		}
 		if port != "" {
-			if _, err := command(workingDirectory, nil, "docker", "exec", containerName, "pg_isready", "-U", "finory", "-d", "ledger_db"); err == nil {
+			if _, err := command(workingDirectory, nil, "docker", "exec", containerName, "pg_isready", "-U", "finory", "-d", "postgres"); err == nil {
 				return port
 			}
 		}
@@ -202,30 +196,41 @@ func waitForPostgres(t *testing.T, workingDirectory, containerName string) strin
 	return ""
 }
 
-func applyLedgerMigrations(t *testing.T, repositoryRoot, containerName string) {
+func applyMigrations(t *testing.T, repositoryRoot, containerName string) {
 	t.Helper()
-	for _, name := range []string{
-		"00001_create_categories_and_wallets.sql",
-		"00002_create_transactions.sql",
-		"00003_create_budgets.sql",
-	} {
-		contents, err := os.ReadFile(filepath.Join(repositoryRoot, "backend/services/ledger-service/migrations", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		migration := string(contents)
-		upStart := strings.Index(migration, "-- +goose Up")
-		downStart := strings.Index(migration, "-- +goose Down")
-		if upStart < 0 || downStart < 0 || downStart <= upStart {
-			t.Fatalf("migration %s is missing Goose Up/Down markers", name)
-		}
-		upSQL := migration[upStart+len("-- +goose Up") : downStart]
-		cmd := exec.Command("docker", "exec", "-i", containerName, "psql", "-v", "ON_ERROR_STOP=1", "-U", "finory", "-d", "ledger_db")
-		cmd.Dir = repositoryRoot
-		cmd.Stdin = strings.NewReader(upSQL)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("apply migration %s: %v\n%s", name, err, output)
+	sets := []struct {
+		database  string
+		directory string
+		files     []string
+	}{
+		{database: "auth_db", directory: "auth", files: []string{
+			"00001_create_users.sql", "00002_create_refresh_sessions.sql",
+		}},
+		{database: "ledger_db", directory: "ledger", files: []string{
+			"00001_create_categories_and_wallets.sql", "00002_create_transactions.sql", "00003_create_budgets.sql",
+		}},
+	}
+	for _, set := range sets {
+		for _, name := range set.files {
+			path := filepath.Join(repositoryRoot, "backend/service/migrations", set.directory, name)
+			contents, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			migration := string(contents)
+			upStart := strings.Index(migration, "-- +goose Up")
+			downStart := strings.Index(migration, "-- +goose Down")
+			if upStart < 0 || downStart < 0 || downStart <= upStart {
+				t.Fatalf("migration %s is missing Goose Up/Down markers", name)
+			}
+			upSQL := migration[upStart+len("-- +goose Up") : downStart]
+			cmd := exec.Command("docker", "exec", "-i", containerName, "psql", "-v", "ON_ERROR_STOP=1", "-U", "finory", "-d", set.database)
+			cmd.Dir = repositoryRoot
+			cmd.Stdin = strings.NewReader(upSQL)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("apply %s migration %s: %v\n%s", set.database, name, err, output)
+			}
 		}
 	}
 }
