@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"finory/backend/service/internal/routes"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/labstack/echo/v5"
 	"golang.org/x/oauth2"
@@ -41,12 +42,25 @@ func NewHandler(oauth oauth2.Config, verifier TokenVerifier, service *Service, a
 	}
 }
 
-func (h *Handler) Register(e *echo.Echo) {
+type RouteMiddleware struct {
+	RequireAccessToken   echo.MiddlewareFunc
+	RequireRefreshOrigin echo.MiddlewareFunc
+	RequireLogoutAuth    echo.MiddlewareFunc
+}
+
+func (h *Handler) Register(e routes.Router, middleware RouteMiddleware) {
 	e.GET("/auth/google", h.authorize)
 	e.GET("/auth/google/callback", h.callback)
-	e.GET("/auth/me", h.me)
-	e.POST("/auth/refresh", h.refresh)
-	e.POST("/auth/logout", h.logout)
+	e.GET("/auth/me", h.me, optionalMiddleware(middleware.RequireAccessToken)...)
+	e.POST("/auth/refresh", h.refresh, optionalMiddleware(middleware.RequireRefreshOrigin)...)
+	e.POST("/auth/logout", h.logout, optionalMiddleware(middleware.RequireLogoutAuth)...)
+}
+
+func optionalMiddleware(value echo.MiddlewareFunc) []echo.MiddlewareFunc {
+	if value == nil {
+		return nil
+	}
+	return []echo.MiddlewareFunc{value}
 }
 
 func (h *Handler) me(c *echo.Context) error {

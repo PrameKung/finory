@@ -138,7 +138,7 @@ func newOAuthFixture(t *testing.T) *oauthFixture {
 	NewHandler(
 		oauth, verifier, NewService(f.users, []byte(testSecret)),
 		"http://localhost:3000/dashboard", "http://localhost:3000/login",
-	).Register(e)
+	).Register(e, RouteMiddleware{})
 	f.handler = e
 	return f
 }
@@ -416,7 +416,7 @@ func TestLogoutClearsSessionAndPendingOAuthCookies(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			e := echo.New()
-			NewHandler(oauth2.Config{RedirectURL: test.redirectURL}, nil, nil, "", "").Register(e)
+			NewHandler(oauth2.Config{RedirectURL: test.redirectURL}, nil, nil, "", "").Register(e, RouteMiddleware{})
 			response := httptest.NewRecorder()
 			e.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 			if response.Code != http.StatusNoContent {

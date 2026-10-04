@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"finory/backend/services/auth-service/internal/database"
+	"finory/backend/service/internal/auth/database"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
