@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"finory/backend/services/analytics-service/internal/ledger"
+	"finory/backend/service/internal/analytics/ledger"
 )
 
 var (

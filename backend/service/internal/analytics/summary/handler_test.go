@@ -107,7 +107,7 @@ func TestMonthlySummaryHandlerReportsLedgerFailure(t *testing.T) {
 
 	e.ServeHTTP(response, request)
 
-	if response.Code != http.StatusBadGateway || response.Body.String() != "{\"error\":\"ledger_service_unavailable\"}\n" {
+	if response.Code != http.StatusInternalServerError || response.Body.String() != "{\"error\":\"analytics_failed\"}\n" {
 		t.Fatalf("unexpected response: status=%d body=%q", response.Code, response.Body.String())
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"finory/backend/service/internal/routes"
 	"github.com/labstack/echo/v5"
 )
 
@@ -27,7 +28,7 @@ func NewHandler(service summaryService) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Register(e *echo.Echo) {
+func (h *Handler) Register(e routes.Router) {
 	e.GET("/analytics/summary", h.monthly)
 	e.GET("/analytics/categories", h.categories)
 	e.GET("/analytics/trends", h.trends)
@@ -44,7 +45,7 @@ func (h *Handler) monthly(c *echo.Context) error {
 		c.Request().Context(), userID, c.Request().Header.Get(echo.HeaderXRequestID), month,
 	)
 	if err != nil {
-		return c.JSON(http.StatusBadGateway, map[string]string{"error": "ledger_service_unavailable"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "analytics_failed"})
 	}
 	return c.JSON(http.StatusOK, result)
 }
@@ -59,7 +60,7 @@ func (h *Handler) categories(c *echo.Context) error {
 		c.Request().Context(), userID, c.Request().Header.Get(echo.HeaderXRequestID), month,
 	)
 	if err != nil {
-		return c.JSON(http.StatusBadGateway, map[string]string{"error": "ledger_service_unavailable"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "analytics_failed"})
 	}
 	return c.JSON(http.StatusOK, result)
 }
@@ -74,7 +75,7 @@ func (h *Handler) trends(c *echo.Context) error {
 		c.Request().Context(), userID, c.Request().Header.Get(echo.HeaderXRequestID), month,
 	)
 	if err != nil {
-		return c.JSON(http.StatusBadGateway, map[string]string{"error": "ledger_service_unavailable"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "analytics_failed"})
 	}
 	return c.JSON(http.StatusOK, result)
 }
@@ -89,7 +90,7 @@ func (h *Handler) monthlyComparison(c *echo.Context) error {
 		c.Request().Context(), userID, c.Request().Header.Get(echo.HeaderXRequestID), month,
 	)
 	if err != nil {
-		return c.JSON(http.StatusBadGateway, map[string]string{"error": "ledger_service_unavailable"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "analytics_failed"})
 	}
 	return c.JSON(http.StatusOK, result)
 }
