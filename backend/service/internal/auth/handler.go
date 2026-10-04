@@ -232,16 +232,29 @@ func (h *Handler) setSessionCookies(c *echo.Context, tokens SessionTokens) {
 		c.SetCookie(&http.Cookie{
 			Name: cookie.name, Value: cookie.value, Path: cookie.path,
 			MaxAge: cookie.maxAge, HttpOnly: true,
-			Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
+			Secure: h.secureCookies, SameSite: h.sessionCookieSameSite(),
 		})
 	}
 }
 
+// Cross-site browser requests (for example, a Vercel app calling a Render API)
+// require SameSite=None. Browsers require Secure with None, so keep Lax for local HTTP.
+func (h *Handler) sessionCookieSameSite() http.SameSite {
+	if h.secureCookies {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
 func (h *Handler) clearCookie(c *echo.Context, name, path string) {
+	sameSite := http.SameSiteLaxMode
+	if name == accessCookieName || name == refreshCookieName {
+		sameSite = h.sessionCookieSameSite()
+	}
 	c.SetCookie(&http.Cookie{
 		Name: name, Path: path, MaxAge: -1,
 		Expires: time.Unix(0, 0), HttpOnly: true,
-		Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
+		Secure: h.secureCookies, SameSite: sameSite,
 	})
 }
 

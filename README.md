@@ -42,6 +42,26 @@ All public routes are served directly by the one Go process under `/api/v1`. The
 
 The interactive Scalar API reference is at `http://localhost:8080/docs`, backed by `/openapi.json`.
 
+## Deploying without a custom domain
+
+The frontend can run on Vercel while the API runs on Render. Since their default
+domains are cross-site, HTTPS API session cookies use `SameSite=None; Secure`;
+local HTTP development keeps `SameSite=Lax`. Some browsers or privacy settings
+block third-party cookies, so this setup may still require allowing cookies for
+the app and API. A custom domain with app and API subdomains avoids that limitation.
+
+Set the production environment values to the actual deployment URLs:
+
+- Vercel `NEXT_PUBLIC_API_URL`: the Render API origin, such as `https://finory-api.onrender.com`.
+- Render `APP_REDIRECT_URL`: the Vercel app origin plus `/dashboard`, such as `https://finory.vercel.app/dashboard`.
+- Render `CORS_ALLOWED_ORIGINS`: the exact Vercel app origin, such as `https://finory.vercel.app` (no path or trailing slash).
+- Render `GOOGLE_REDIRECT_URL`: the API origin plus `/api/v1/auth/google/callback`.
+- Google OAuth authorized redirect URI: the exact same callback URL as `GOOGLE_REDIRECT_URL`.
+
+After changing these values, redeploy both services and sign in again. Use the
+Vercel production domain consistently; preview deployment domains need to be
+added explicitly to `CORS_ALLOWED_ORIGINS` if you want to test them.
+
 ## Commands
 
 - `make run-api` starts the Go backend.
