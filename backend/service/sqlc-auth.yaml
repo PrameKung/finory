@@ -1,0 +1,10 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "sql/auth"
+    schema: "migrations/auth"
+    gen:
+      go:
+        package: "database"
+        out: "internal/auth/database"
+        sql_package: "pgx/v5"
