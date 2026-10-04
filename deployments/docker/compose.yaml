@@ -1,73 +1,22 @@
 name: finory
 
 services:
-  auth-service:
+  api:
     build:
-      context: ../../backend/services/auth-service
+      context: ../../backend/service
       dockerfile: Dockerfile
     environment:
-      PORT: "8081"
-      DATABASE_URL: "${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env.local}"
+      PORT: "8080"
+      AUTH_DATABASE_URL: "${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env.local}"
+      LEDGER_DATABASE_URL: "${LEDGER_DATABASE_URL:?Set LEDGER_DATABASE_URL in .env.local}"
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env.local}"
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env.local}"
       GOOGLE_REDIRECT_URL: "${GOOGLE_REDIRECT_URL:?Set GOOGLE_REDIRECT_URL in .env.local}"
       APP_REDIRECT_URL: "${APP_REDIRECT_URL:?Set APP_REDIRECT_URL in .env.local}"
       JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env.local}"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  ledger-service:
-    build:
-      context: ../../backend/services/ledger-service
-      dockerfile: Dockerfile
-    environment:
-      PORT: "8082"
-      DATABASE_URL: "${LEDGER_DATABASE_URL:?Set LEDGER_DATABASE_URL in .env.local}"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  analytics-service:
-    build:
-      context: ../../backend/services/analytics-service
-      dockerfile: Dockerfile
-    environment:
-      PORT: "8083"
-      LEDGER_SERVICE_URL: ${LEDGER_SERVICE_URL:-http://ledger-service:8082}
-    depends_on:
-      ledger-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8083/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  api-gateway:
-    build:
-      context: ../../backend/services/api-gateway
-      dockerfile: Dockerfile
-    environment:
-      PORT: "8080"
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
-      LEDGER_SERVICE_URL: ${LEDGER_SERVICE_URL:-http://ledger-service:8082}
-      ANALYTICS_SERVICE_URL: ${ANALYTICS_SERVICE_URL:-http://analytics-service:8083}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
-      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env.local}"
     ports:
-      - "127.0.0.1:${API_GATEWAY_PORT:-8080}:8080"
-    depends_on:
-      auth-service:
-        condition: service_healthy
-      ledger-service:
-        condition: service_healthy
-      analytics-service:
-        condition: service_healthy
+      - "127.0.0.1:${API_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
       interval: 5s
