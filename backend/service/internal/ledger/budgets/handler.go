@@ -1,4 +1,4 @@
-package categories
+package budgets
 
 import (
 	"context"
@@ -8,32 +8,32 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"finory/backend/service/internal/routes"
 	"github.com/labstack/echo/v5"
 )
 
 const userIDHeader = "X-User-ID"
 
-type categoryService interface {
-	Create(context.Context, string, CreateInput) (Category, error)
-	List(context.Context, string) ([]Category, error)
-	Update(context.Context, string, string, UpdateInput) (Category, error)
+type budgetService interface {
+	Create(context.Context, string, CreateInput) (Budget, error)
+	List(context.Context, string, ListFilter) ([]Budget, error)
+	Update(context.Context, string, string, UpdateInput) (Budget, error)
 	Delete(context.Context, string, string) error
 }
 
 type Handler struct {
-	service categoryService
+	service budgetService
 }
 
-func NewHandler(service categoryService) *Handler {
+func NewHandler(service budgetService) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Register(e *echo.Echo) {
-	e.GET("/categories", h.list)
-	e.POST("/categories", h.create)
-	e.PATCH("/categories/:id", h.update)
-	e.DELETE("/categories/:id", h.delete)
+func (h *Handler) Register(e routes.Router) {
+	e.GET("/budgets", h.list)
+	e.POST("/budgets", h.create)
+	e.PATCH("/budgets/:id", h.update)
+	e.DELETE("/budgets/:id", h.delete)
 }
 
 func (h *Handler) list(c *echo.Context) error {
@@ -41,13 +41,13 @@ func (h *Handler) list(c *echo.Context) error {
 	if !ok {
 		return unauthorized(c)
 	}
-	categories, err := h.service.List(c.Request().Context(), userID)
+	items, err := h.service.List(c.Request().Context(), userID, ListFilter{Month: c.QueryParam("month")})
 	if err != nil {
-		return operationFailed(c)
+		return budgetError(c, err)
 	}
-	response := make([]categoryResponse, 0, len(categories))
-	for _, category := range categories {
-		response = append(response, newCategoryResponse(category))
+	response := make([]budgetResponse, 0, len(items))
+	for _, item := range items {
+		response = append(response, newBudgetResponse(item))
 	}
 	return c.JSON(http.StatusOK, response)
 }
@@ -61,11 +61,11 @@ func (h *Handler) create(c *echo.Context) error {
 	if err := decodeJSON(c, &request); err != nil {
 		return invalidRequest(c)
 	}
-	category, err := h.service.Create(c.Request().Context(), userID, request)
+	budget, err := h.service.Create(c.Request().Context(), userID, request)
 	if err != nil {
-		return categoryError(c, err)
+		return budgetError(c, err)
 	}
-	return c.JSON(http.StatusCreated, newCategoryResponse(category))
+	return c.JSON(http.StatusCreated, newBudgetResponse(budget))
 }
 
 func (h *Handler) update(c *echo.Context) error {
@@ -80,11 +80,11 @@ func (h *Handler) update(c *echo.Context) error {
 	if err := decodeJSON(c, &request); err != nil {
 		return invalidRequest(c)
 	}
-	category, err := h.service.Update(c.Request().Context(), userID, c.Param("id"), request)
+	budget, err := h.service.Update(c.Request().Context(), userID, c.Param("id"), request)
 	if err != nil {
-		return categoryError(c, err)
+		return budgetError(c, err)
 	}
-	return c.JSON(http.StatusOK, newCategoryResponse(category))
+	return c.JSON(http.StatusOK, newBudgetResponse(budget))
 }
 
 func (h *Handler) delete(c *echo.Context) error {
@@ -96,7 +96,7 @@ func (h *Handler) delete(c *echo.Context) error {
 		return invalidRequest(c)
 	}
 	if err := h.service.Delete(c.Request().Context(), userID, c.Param("id")); err != nil {
-		return categoryError(c, err)
+		return budgetError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -104,14 +104,6 @@ func (h *Handler) delete(c *echo.Context) error {
 func authenticatedUserID(c *echo.Context) (string, bool) {
 	value := c.Request().Header.Get(userIDHeader)
 	return value, validUUID(value)
-}
-
-func validUUID(value string) bool {
-	var id pgtype.UUID
-	if err := id.Scan(value); err != nil || !id.Valid || id.Bytes == [16]byte{} {
-		return false
-	}
-	return true
 }
 
 func decodeJSON(c *echo.Context, destination any) error {
@@ -126,25 +118,27 @@ func decodeJSON(c *echo.Context, destination any) error {
 	return nil
 }
 
-func categoryError(c *echo.Context, err error) error {
+func budgetError(c *echo.Context, err error) error {
 	switch {
-	case errors.Is(err, ErrInvalidCategory):
+	case errors.Is(err, ErrInvalidBudget):
 		return invalidRequest(c)
-	case errors.Is(err, ErrCategoryNotFound):
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "category_not_found"})
-	case errors.Is(err, ErrCategoryConflict):
-		return c.JSON(http.StatusConflict, map[string]string{"error": "category_already_exists"})
+	case errors.Is(err, ErrInvalidBudgetReference):
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid_budget_reference"})
+	case errors.Is(err, ErrBudgetNotFound):
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "budget_not_found"})
+	case errors.Is(err, ErrBudgetConflict):
+		return c.JSON(http.StatusConflict, map[string]string{"error": "budget_already_exists"})
 	default:
 		return operationFailed(c)
 	}
 }
 
-func newCategoryResponse(category Category) categoryResponse {
-	return categoryResponse{
-		ID: category.ID, Name: category.Name, Type: category.Type,
-		Icon: category.Icon, Color: category.Color, IsDefault: category.IsDefault,
-		CreatedAt: category.CreatedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt: category.UpdatedAt.UTC().Format(time.RFC3339Nano),
+func newBudgetResponse(budget Budget) budgetResponse {
+	return budgetResponse{
+		ID: budget.ID, CategoryID: budget.CategoryID, Amount: budget.Amount,
+		Month:     budget.MonthStart.Format("2006-01"),
+		CreatedAt: budget.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt: budget.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -157,5 +151,5 @@ func invalidRequest(c *echo.Context) error {
 }
 
 func operationFailed(c *echo.Context) error {
-	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "category_operation_failed"})
+	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "budget_operation_failed"})
 }

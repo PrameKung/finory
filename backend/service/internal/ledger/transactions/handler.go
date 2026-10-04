@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"finory/backend/service/internal/routes"
 	"github.com/labstack/echo/v5"
 )
 
@@ -29,7 +30,7 @@ func NewHandler(service transactionService) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Register(e *echo.Echo) {
+func (h *Handler) Register(e routes.Router) {
 	e.GET("/transactions", h.list)
 	e.POST("/transactions", h.create)
 	e.GET("/transactions/:id", h.get)

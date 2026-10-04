@@ -3,7 +3,7 @@ package wallets
 import (
 	"context"
 
-	"finory/backend/services/ledger-service/internal/database"
+	"finory/backend/service/internal/ledger/database"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"

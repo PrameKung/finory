@@ -1,4 +1,4 @@
-package wallets
+package categories
 
 import (
 	"context"
@@ -8,32 +8,33 @@ import (
 	"net/http"
 	"time"
 
+	"finory/backend/service/internal/routes"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v5"
 )
 
 const userIDHeader = "X-User-ID"
 
-type walletService interface {
-	Create(context.Context, string, CreateInput) (Wallet, error)
-	List(context.Context, string) ([]Wallet, error)
-	Update(context.Context, string, string, UpdateInput) (Wallet, error)
+type categoryService interface {
+	Create(context.Context, string, CreateInput) (Category, error)
+	List(context.Context, string) ([]Category, error)
+	Update(context.Context, string, string, UpdateInput) (Category, error)
 	Delete(context.Context, string, string) error
 }
 
 type Handler struct {
-	service walletService
+	service categoryService
 }
 
-func NewHandler(service walletService) *Handler {
+func NewHandler(service categoryService) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Register(e *echo.Echo) {
-	e.GET("/wallets", h.list)
-	e.POST("/wallets", h.create)
-	e.PATCH("/wallets/:id", h.update)
-	e.DELETE("/wallets/:id", h.delete)
+func (h *Handler) Register(e routes.Router) {
+	e.GET("/categories", h.list)
+	e.POST("/categories", h.create)
+	e.PATCH("/categories/:id", h.update)
+	e.DELETE("/categories/:id", h.delete)
 }
 
 func (h *Handler) list(c *echo.Context) error {
@@ -41,13 +42,13 @@ func (h *Handler) list(c *echo.Context) error {
 	if !ok {
 		return unauthorized(c)
 	}
-	wallets, err := h.service.List(c.Request().Context(), userID)
+	categories, err := h.service.List(c.Request().Context(), userID)
 	if err != nil {
 		return operationFailed(c)
 	}
-	response := make([]walletResponse, 0, len(wallets))
-	for _, wallet := range wallets {
-		response = append(response, newWalletResponse(wallet))
+	response := make([]categoryResponse, 0, len(categories))
+	for _, category := range categories {
+		response = append(response, newCategoryResponse(category))
 	}
 	return c.JSON(http.StatusOK, response)
 }
@@ -61,11 +62,11 @@ func (h *Handler) create(c *echo.Context) error {
 	if err := decodeJSON(c, &request); err != nil {
 		return invalidRequest(c)
 	}
-	wallet, err := h.service.Create(c.Request().Context(), userID, request)
+	category, err := h.service.Create(c.Request().Context(), userID, request)
 	if err != nil {
-		return walletError(c, err)
+		return categoryError(c, err)
 	}
-	return c.JSON(http.StatusCreated, newWalletResponse(wallet))
+	return c.JSON(http.StatusCreated, newCategoryResponse(category))
 }
 
 func (h *Handler) update(c *echo.Context) error {
@@ -80,11 +81,11 @@ func (h *Handler) update(c *echo.Context) error {
 	if err := decodeJSON(c, &request); err != nil {
 		return invalidRequest(c)
 	}
-	wallet, err := h.service.Update(c.Request().Context(), userID, c.Param("id"), request)
+	category, err := h.service.Update(c.Request().Context(), userID, c.Param("id"), request)
 	if err != nil {
-		return walletError(c, err)
+		return categoryError(c, err)
 	}
-	return c.JSON(http.StatusOK, newWalletResponse(wallet))
+	return c.JSON(http.StatusOK, newCategoryResponse(category))
 }
 
 func (h *Handler) delete(c *echo.Context) error {
@@ -96,7 +97,7 @@ func (h *Handler) delete(c *echo.Context) error {
 		return invalidRequest(c)
 	}
 	if err := h.service.Delete(c.Request().Context(), userID, c.Param("id")); err != nil {
-		return walletError(c, err)
+		return categoryError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -126,25 +127,25 @@ func decodeJSON(c *echo.Context, destination any) error {
 	return nil
 }
 
-func walletError(c *echo.Context, err error) error {
+func categoryError(c *echo.Context, err error) error {
 	switch {
-	case errors.Is(err, ErrInvalidWallet):
+	case errors.Is(err, ErrInvalidCategory):
 		return invalidRequest(c)
-	case errors.Is(err, ErrWalletNotFound):
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "wallet_not_found"})
-	case errors.Is(err, ErrWalletConflict):
-		return c.JSON(http.StatusConflict, map[string]string{"error": "wallet_already_exists"})
+	case errors.Is(err, ErrCategoryNotFound):
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "category_not_found"})
+	case errors.Is(err, ErrCategoryConflict):
+		return c.JSON(http.StatusConflict, map[string]string{"error": "category_already_exists"})
 	default:
 		return operationFailed(c)
 	}
 }
 
-func newWalletResponse(wallet Wallet) walletResponse {
-	return walletResponse{
-		ID: wallet.ID, Name: wallet.Name, Type: wallet.Type, Balance: wallet.Balance,
-		CurrencyCode: wallet.CurrencyCode, IsDefault: wallet.IsDefault,
-		CreatedAt: wallet.CreatedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt: wallet.UpdatedAt.UTC().Format(time.RFC3339Nano),
+func newCategoryResponse(category Category) categoryResponse {
+	return categoryResponse{
+		ID: category.ID, Name: category.Name, Type: category.Type,
+		Icon: category.Icon, Color: category.Color, IsDefault: category.IsDefault,
+		CreatedAt: category.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt: category.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -157,5 +158,5 @@ func invalidRequest(c *echo.Context) error {
 }
 
 func operationFailed(c *echo.Context) error {
-	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "wallet_operation_failed"})
+	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "category_operation_failed"})
 }
