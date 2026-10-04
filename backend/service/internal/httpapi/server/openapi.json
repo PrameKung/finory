@@ -3,9 +3,9 @@
   "info": {
     "title": "Finory API",
     "version": "1.0.0",
-    "description": "Public API exposed by the Finory API Gateway. Monetary values are decimal strings and backend timestamps are UTC."
+    "description": "Public API served by the Finory Go application. Monetary values are decimal strings and backend timestamps are UTC."
   },
-  "servers": [{ "url": "/", "description": "Current API Gateway" }],
+  "servers": [{ "url": "/", "description": "Current Finory API" }],
   "tags": [
     { "name": "Authentication" }, { "name": "Transactions" },
     { "name": "Categories" }, { "name": "Wallets" },
@@ -13,10 +13,7 @@
   ],
   "security": [{ "bearerAuth": [] }, { "accessCookie": [] }],
   "paths": {
-    "/health": { "get": { "tags": ["Health"], "summary": "Check API Gateway health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
-    "/api/v1/auth/health": { "get": { "tags": ["Health"], "summary": "Check Auth Service health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
-    "/api/v1/ledger/health": { "get": { "tags": ["Health"], "summary": "Check Ledger Service health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
-    "/api/v1/analytics/health": { "get": { "tags": ["Health"], "summary": "Check Analytics Service health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
+    "/health": { "get": { "tags": ["Health"], "summary": "Check API health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Healthy" } } } },
     "/api/v1/auth/google": {
       "get": { "tags": ["Authentication"], "summary": "Start Google sign-in", "description": "Sets an OAuth flow cookie and redirects to Google.", "security": [], "responses": { "302": { "description": "Redirect to Google" }, "500": { "$ref": "#/components/responses/Failure" } } }
     },
@@ -92,7 +89,7 @@
       "NotFound": { "description": "Resource not found for this user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
       "Conflict": { "description": "Resource already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
       "Failure": { "description": "Operation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "AnalyticsFailure": { "description": "Ledger Service is unavailable", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+      "AnalyticsFailure": { "description": "Analytics operation failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
     },
     "requestBodies": {
       "TransactionCreate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransactionInput" } } } },
@@ -132,10 +129,10 @@
       "AmountChange": { "type": "object", "properties": { "amount": { "$ref": "#/components/schemas/Money" }, "percentage": { "type": ["string", "null"] } } }
     },
     "pathItems": {
-      "MonthlySummary": { "get": { "tags": ["Analytics"], "summary": "Get monthly income, expense, and net balance totals", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Summary", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthlySummary" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
-      "CategoryAnalytics": { "get": { "tags": ["Analytics"], "summary": "Get expense distribution by category", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Distribution", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryDistribution" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
-      "Trends": { "get": { "tags": ["Analytics"], "summary": "Get daily income and expense trends", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Trends", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TrendSeries" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
-      "MonthlyComparison": { "get": { "tags": ["Analytics"], "summary": "Compare a month with the previous month", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Comparison", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthlyComparison" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "502": { "$ref": "#/components/responses/AnalyticsFailure" } } } }
+      "MonthlySummary": { "get": { "tags": ["Analytics"], "summary": "Get monthly income, expense, and net balance totals", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Summary", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthlySummary" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "500": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
+      "CategoryAnalytics": { "get": { "tags": ["Analytics"], "summary": "Get expense distribution by category", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Distribution", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryDistribution" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "500": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
+      "Trends": { "get": { "tags": ["Analytics"], "summary": "Get daily income and expense trends", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Trends", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TrendSeries" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "500": { "$ref": "#/components/responses/AnalyticsFailure" } } } },
+      "MonthlyComparison": { "get": { "tags": ["Analytics"], "summary": "Compare a month with the previous month", "parameters": [{ "$ref": "#/components/parameters/Month" }], "responses": { "200": { "description": "Comparison", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthlyComparison" } } } }, "400": { "$ref": "#/components/responses/Invalid" }, "500": { "$ref": "#/components/responses/AnalyticsFailure" } } } }
     }
   }
 }

@@ -11,7 +11,7 @@ import (
 
 const AuthenticatedUserIDHeader = "X-User-ID"
 
-// RequireAccessToken verifies access tokens before a request reaches a service.
+// RequireAccessToken verifies access tokens before a request reaches a protected handler.
 func RequireAccessToken(secret []byte, allowedOrigins []string) echo.MiddlewareFunc {
 	if len(secret) < 32 {
 		panic("JWT access secret must be at least 32 bytes")
