@@ -1,9 +1,7 @@
-import { env } from "../env.ts";
 import { ApiError, parseApiErrorBody } from "./errors.ts";
 
 export { ApiError, getApiErrorMessage } from "./errors.ts";
 
-const apiBaseUrl = env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
 const refreshPath = "/api/v1/auth/refresh";
 
 let refreshPromise: Promise<void> | undefined;
@@ -19,7 +17,7 @@ async function readApiError(response: Response) {
 export function getApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
-  return `${apiBaseUrl}${normalizedPath}`;
+  return normalizedPath;
 }
 
 async function performApiRequest<T>(

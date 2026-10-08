@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "NEXT_PUBLIC_API_URL=http://localhost:8080 node --test src/lib/api/*.test.ts src/lib/query-client.test.ts src/features/*/schemas/*.test.ts"
+    "test": "node --test src/lib/api/*.test.ts src/lib/query-client.test.ts src/features/*/schemas/*.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

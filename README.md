@@ -42,25 +42,27 @@ All public routes are served directly by the one Go process under `/api/v1`. The
 
 The interactive Scalar API reference is at `http://localhost:8080/docs`, backed by `/openapi.json`.
 
-## Deploying without a custom domain
+## Deploying frontend and API separately
 
-The frontend can run on Vercel while the API runs on Render. Since their default
-domains are cross-site, HTTPS API session cookies use `SameSite=None; Secure`;
-local HTTP development keeps `SameSite=Lax`. Some browsers or privacy settings
-block third-party cookies, so this setup may still require allowing cookies for
-the app and API. A custom domain with app and API subdomains avoids that limitation.
+The Next.js app exposes a same-origin proxy under `/api/v1/*` and forwards
+requests to the Go API. The browser stores the session cookies on the frontend
+host, so the Vercel and Render default domains can be used without third-party
+cookies. The proxy preserves query strings, redirects, request cookies, and all
+`Set-Cookie` headers.
 
-Set the production environment values to the actual deployment URLs:
+Set these production values, replacing the examples with your actual URLs:
 
-- Vercel `NEXT_PUBLIC_API_URL`: the Render API origin, such as `https://finory-api.onrender.com`.
-- Render `APP_REDIRECT_URL`: the Vercel app origin plus `/dashboard`, such as `https://finory.vercel.app/dashboard`.
+- Vercel `API_PROXY_TARGET`: the Render API origin, such as `https://finory-api.onrender.com`.
+- Render `APP_REDIRECT_URL`: the Vercel app URL plus `/dashboard`, such as `https://finory.vercel.app/dashboard`.
+- Render `GOOGLE_REDIRECT_URL`: the Vercel app URL plus `/api/v1/auth/google/callback`.
 - Render `CORS_ALLOWED_ORIGINS`: the exact Vercel app origin, such as `https://finory.vercel.app` (no path or trailing slash).
-- Render `GOOGLE_REDIRECT_URL`: the API origin plus `/api/v1/auth/google/callback`.
 - Google OAuth authorized redirect URI: the exact same callback URL as `GOOGLE_REDIRECT_URL`.
 
-After changing these values, redeploy both services and sign in again. Use the
-Vercel production domain consistently; preview deployment domains need to be
-added explicitly to `CORS_ALLOWED_ORIGINS` if you want to test them.
+The Google callback must use the Vercel URL so Google returns through the
+frontend proxy. For local development, set `API_PROXY_TARGET=http://localhost:8080`;
+the Google callback and app redirect can remain on localhost. Redeploy after
+changing environment variables. Add Vercel preview origins to
+`CORS_ALLOWED_ORIGINS` if you need OAuth to work on preview deployments.
 
 ## Commands
 
